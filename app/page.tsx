@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase'; // 위에서 만든 supabase 클라이언트
+//import { supabase } from '@/lib/supabase'; // 위에서 만든 supabase 클라이언트
 
 export default function TherapySystem() {
   const [isAdminMode, setIsAdminMode] = useState(false);
