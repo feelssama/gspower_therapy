@@ -125,7 +125,7 @@ export default function TherapyApp() {
 
   const [programs, setPrograms] = useState([
     {
-      id: 1, title: '근골격계 예방 테라피', category: '물리치료',
+      id: 1, title: '근골격계 테라피', category: '물리치료',
       location: '안양사업소', date: '2026-05-20', time: '14:00~17:00',
       capacity: 20, applied: 18, rating: 4.9,
       therapist: { name: '김은정', role: '물리치료사', exp: '15년', avatar: 'KE' },
@@ -147,14 +147,6 @@ export default function TherapyApp() {
       therapist: { name: '이수민', role: '아로마테라피스트', exp: '8년', avatar: 'LS' },
       desc: '심신의 긴장 완화를 위한 프리미엄 아로마 릴렉싱 세션입니다.',
       tags: ['스트레스', '수면개선', '힐링'], color: 'green', duration: '60분/인'
-    },
-    {
-      id: 4, title: '족저근막염 집중케어', category: '물리치료',
-      location: '안양사업소', date: '2026-06-03', time: '10:00~12:00',
-      capacity: 12, applied: 4, rating: 4.7,
-      therapist: { name: '정민아', role: '물리치료사', exp: '12년', avatar: 'JM' },
-      desc: '장시간 서서 근무하는 임직원을 위한 발·다리 집중 케어 프로그램.',
-      tags: ['족저근막염', '하지부종', '현장직'], color: 'orange', duration: '45분/인'
     },
   ]);
 
@@ -1054,30 +1046,51 @@ const AdminGate = ({ pw, setPw, onSubmit, onClose }) => (
 
 const AdminPanel = ({ programs, setPrograms, colorMap }) => {
   const [form, setForm] = useState({
-    title: '', category: '물리치료', location: '안양사업소',
+    titleType: '근골격계 테라피', customTitle: '', 
+    category: '물리치료', location: '안양사업소',
     date: '', time: '14:00~17:00', capacity: '', duration: '50분/인',
-    color: 'orange', therapistName: '', therapistRole: '물리치료사', therapistExp: '', desc: '',
+    therapistName: '', therapistRole: '물리치료사', therapistExp: '', desc: '',
   });
 
   const totalApplied = programs.reduce((a, p) => a + p.applied, 0);
   const totalCapacity = programs.reduce((a, p) => a + p.capacity, 0);
   const fillRate = totalCapacity ? Math.round((totalApplied / totalCapacity) * 100) : 0;
 
+  // 지역별 컬러 자동 할당 로직
+  const getLocationColor = (loc) => {
+    if (loc.includes('안양')) return 'orange';
+    if (loc.includes('부천')) return 'blue';
+    if (loc.includes('서울')) return 'green';
+    return 'orange'; 
+  };
+
   const createProgram = () => {
-    if (!form.title || !form.date || !form.capacity || !form.therapistName) {
+    const finalTitle = form.titleType === '기타' ? form.customTitle : form.titleType;
+
+    if (!finalTitle || !form.date || !form.capacity || !form.therapistName) {
       alert('필수 항목을 입력해주세요');
       return;
     }
+
     const newP = {
-      id: Date.now(), title: form.title, category: form.category,
-      location: form.location, date: form.date, time: form.time,
-      capacity: parseInt(form.capacity), applied: 0, rating: 5.0,
+      id: Date.now(), 
+      title: finalTitle, 
+      category: form.category,
+      location: form.location, 
+      date: form.date, 
+      time: form.time,
+      capacity: parseInt(form.capacity), 
+      applied: 0, 
+      rating: 5.0,
       therapist: { name: form.therapistName, role: form.therapistRole, exp: form.therapistExp || '5년', avatar: form.therapistName.charAt(0) },
       desc: form.desc || '전문가와 함께하는 프로그램입니다.',
-      tags: ['신규', form.category], color: form.color, duration: form.duration,
+      tags: ['신규', form.category], 
+      color: getLocationColor(form.location), // 지역에 따라 컬러 자동 지정!
+      duration: form.duration,
     };
+    
     setPrograms([newP, ...programs]);
-    setForm({ ...form, title: '', date: '', capacity: '', therapistName: '', therapistExp: '', desc: '' });
+    setForm({ ...form, titleType: '근골격계 테라피', customTitle: '', date: '', capacity: '', therapistName: '', therapistExp: '', desc: '' });
   };
 
   const deleteProgram = (id) => {
@@ -1132,19 +1145,38 @@ const AdminPanel = ({ programs, setPrograms, colorMap }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          
           <Field label="프로그램명 *">
-            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="예: 허리통증 집중케어" className={inputCls} />
+            <select value={form.titleType} onChange={e => setForm({ ...form, titleType: e.target.value })} className={inputCls}>
+              <option>근골격계 테라피</option>
+              <option>기타</option>
+            </select>
           </Field>
+          
+          {form.titleType === '기타' && (
+            <Field label="프로그램명 직접 입력 *">
+              <input 
+                value={form.customTitle} 
+                onChange={e => setForm({ ...form, customTitle: e.target.value })} 
+                placeholder="예: 거북목 교정 클래스" 
+                className={inputCls} 
+                autoFocus 
+              />
+            </Field>
+          )}
+
           <Field label="카테고리">
             <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className={inputCls}>
               <option>물리치료</option><option>자세교정</option><option>휴식요법</option><option>운동요법</option>
             </select>
           </Field>
-          <Field label="장소">
+          
+          <Field label="장소 (컬러 자동 지정)">
             <select value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className={inputCls}>
               <option>안양사업소</option><option>부천사업소</option><option>서울사업소</option>
             </select>
           </Field>
+          
           <Field label="날짜 *">
             <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className={inputCls} />
           </Field>
@@ -1165,22 +1197,7 @@ const AdminPanel = ({ programs, setPrograms, colorMap }) => {
           <Field label="경력">
             <input value={form.therapistExp} onChange={e => setForm({ ...form, therapistExp: e.target.value })} placeholder="10년" className={inputCls} />
           </Field>
-          <Field label="컬러 테마">
-            <div className="flex gap-2 p-1 bg-gray-50 rounded-xl">
-              {[
-                { k: 'orange', c: '#F47B20' },
-                { k: 'blue', c: '#1B3A6B' },
-                { k: 'green', c: '#5CB85C' }
-              ].map(({ k, c }) => (
-                <button
-                  key={k} type="button"
-                  onClick={() => setForm({ ...form, color: k })}
-                  className={`flex-1 h-10 rounded-lg transition-all ${form.color === k ? 'ring-2 ring-offset-2 ring-[#0A1628] scale-105' : 'opacity-50'}`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </Field>
+
           <div className="md:col-span-2 lg:col-span-3">
             <Field label="프로그램 소개">
               <textarea value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} placeholder="프로그램 상세 설명" rows={3} className={`${inputCls} resize-none`} />
