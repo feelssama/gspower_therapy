@@ -9,27 +9,29 @@ import {
 } from 'lucide-react';
 
 // ══════════════════════════════════════════════════════════
-// GS파워 로고 (공식 벡터 CI + 홈버튼 라우팅 + 에러 방지 처리)
+// GS파워 로고 (로컬 이미지 완벽 지원 + 에러 시 텍스트 전환 + 홈 라우팅)
 // ══════════════════════════════════════════════════════════
 const GSLogo = ({ size = 36, onClick }) => {
-  const [imgFailed, setImgFailed] = useState(false);
+  const [imgError, setImgError] = useState(false);
   return (
     <div 
       onClick={onClick} 
-      className={`flex items-center ${onClick ? 'cursor-pointer active:scale-95 transition-transform hover:opacity-80' : ''}`}
+      className={`flex items-center gap-1.5 ${onClick ? 'cursor-pointer active:scale-95 transition-transform hover:opacity-80' : ''}`}
     >
-      {!imgFailed ? (
+      {!imgError ? (
         <img 
-          src="https://upload.wikimedia.org/wikipedia/commons/1/1b/GS_logo_%28South_Korean_company%29.svg" 
-          alt="GS" 
-          style={{ height: size * 0.75, width: 'auto' }} 
+          src="/logo.png" 
+          alt="GS 파워" 
+          style={{ height: size * 0.85, width: 'auto' }} 
           className="flex-shrink-0 object-contain"
-          onError={() => setImgFailed(true)} // 이미지 로드 실패 시 플랜B 가동
+          onError={() => setImgError(true)} 
         />
       ) : (
-        <span className="font-black tracking-tighter text-[#2B4C8C] mr-0.5" style={{ fontSize: size * 0.65, fontFamily: 'Arial, sans-serif' }}>GS</span>
+        <div className="flex items-baseline gap-[2px] ml-0.5" style={{ transform: 'translateY(1px)' }}>
+          <span className="font-black tracking-tighter" style={{ color: '#2B4C8C', fontSize: size * 0.65, fontFamily: 'Arial, sans-serif' }}>GS</span>
+          <span className="font-bold tracking-tight text-[#555555]" style={{ fontSize: size * 0.6, fontFamily: "'Pretendard Variable', sans-serif" }}>파워</span>
+        </div>
       )}
-      <span className="font-bold tracking-tight text-[#555555] ml-1" style={{ fontSize: size * 0.6, fontFamily: "'Pretendard Variable', sans-serif", transform: 'translateY(1px)' }}>파워</span>
     </div>
   );
 };
@@ -270,10 +272,20 @@ export default function TherapyApp() {
         </aside>
 
         <main className="flex-1 min-w-0 pb-24 lg:pb-8">
-          {/* Mobile Top Bar */}
+          {/* Mobile Top Bar (여기에 모바일용 로그아웃 버튼을 추가했습니다!) */}
           <div className="lg:hidden sticky top-0 z-30 bg-[#FAFAF7]/90 backdrop-blur-xl border-b border-gray-100 px-5 py-3 flex items-center justify-between">
             <GSLogo size={28} onClick={() => setCurrentTab('home')} />
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#F47B20] to-[#1B3A6B] flex items-center justify-center text-white font-black text-[13px]">{user.name.charAt(0)}</div>
+            <div className="flex items-center gap-2.5">
+              <button onClick={() => setShowNotifications(true)} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center relative">
+                <Bell size={14} className="text-[#0A1628]" />
+                {notifications.length > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#F47B20] rounded-full" />}
+              </button>
+              {/* 모바일 퀵 로그아웃 버튼 추가 */}
+              <button onClick={() => { setUser(null); setIsAdmin(false); }} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:text-red-500">
+                <LogOut size={14} />
+              </button>
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F47B20] to-[#1B3A6B] flex items-center justify-center text-white font-black text-[13px]">{user.name.charAt(0)}</div>
+            </div>
           </div>
 
           <div className="px-5 lg:px-10 py-6 lg:py-8 max-w-[1400px] mx-auto">
@@ -475,7 +487,7 @@ const AdminGate = ({ pw, setPw, onSubmit, onClose }) => (
 );
 
 // ══════════════════════════════════════════════════════════
-// Admin Dashboard (신청기한 및 상태 로직 완벽 적용)
+// Admin Dashboard
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, setPrograms, colorMap, onRunLottery }) => {
   const [form, setForm] = useState({
