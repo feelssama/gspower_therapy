@@ -5,28 +5,34 @@ import { useState, useEffect } from 'react';
 import {
   Shield, Calendar, MapPin, Clock, Users, ArrowRight, Check, X,
   ChevronRight, Plus, Home, Bell, Sparkles, Activity, TrendingUp,
-  BarChart3, LogOut, Search, Star, Award, Heart, Stethoscope, Dna, Timer
+  BarChart3, LogOut, Search, Star, Award, Heart, Stethoscope, Dna
 } from 'lucide-react';
 
 // ══════════════════════════════════════════════════════════
-// GS파워 로고 (절대 깨지지 않는 고해상도 PNG 방식)
+// GS파워 로고 (공식 벡터 CI + 홈버튼 라우팅 + 에러 방지 처리)
 // ══════════════════════════════════════════════════════════
-const GSLogo = ({ size = 36, showText = true }) => (
-  <div className="flex items-center gap-1.5">
-    <img 
-      src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/GS_logo_%28South_Korean_company%29.svg/320px-GS_logo_%28South_Korean_company%29.svg.png" 
-      alt="GS Logo" 
-      style={{ height: size * 0.8, width: 'auto' }} 
-      className="flex-shrink-0 object-contain"
-    />
-    {showText && (
-      <div className="flex items-baseline gap-[2px] ml-0.5" style={{ transform: 'translateY(1px)' }}>
-        <span className="font-black tracking-tighter" style={{ color: '#2B4C8C', fontSize: size * 0.65, fontFamily: 'Arial, sans-serif' }}>GS</span>
-        <span className="font-bold tracking-tight text-[#555555]" style={{ fontSize: size * 0.6, fontFamily: "'Pretendard Variable', sans-serif" }}>파워</span>
-      </div>
-    )}
-  </div>
-);
+const GSLogo = ({ size = 36, onClick }) => {
+  const [imgFailed, setImgFailed] = useState(false);
+  return (
+    <div 
+      onClick={onClick} 
+      className={`flex items-center ${onClick ? 'cursor-pointer active:scale-95 transition-transform hover:opacity-80' : ''}`}
+    >
+      {!imgFailed ? (
+        <img 
+          src="https://upload.wikimedia.org/wikipedia/commons/1/1b/GS_logo_%28South_Korean_company%29.svg" 
+          alt="GS" 
+          style={{ height: size * 0.75, width: 'auto' }} 
+          className="flex-shrink-0 object-contain"
+          onError={() => setImgFailed(true)} // 이미지 로드 실패 시 플랜B 가동
+        />
+      ) : (
+        <span className="font-black tracking-tighter text-[#2B4C8C] mr-0.5" style={{ fontSize: size * 0.65, fontFamily: 'Arial, sans-serif' }}>GS</span>
+      )}
+      <span className="font-bold tracking-tight text-[#555555] ml-1" style={{ fontSize: size * 0.6, fontFamily: "'Pretendard Variable', sans-serif", transform: 'translateY(1px)' }}>파워</span>
+    </div>
+  );
+};
 
 // ══════════════════════════════════════════════════════════
 // 글로벌 스타일
@@ -69,12 +75,19 @@ const formatDate = (iso) => {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
 };
 
-// 🔥 [핵심 로직] 현재 날짜와 비교하여 '상태' 자동 계산
+const daysUntil = (iso) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const diff = Math.ceil((d - new Date()) / 86400000);
+  if (diff < 0) return '종료';
+  if (diff === 0) return '오늘';
+  if (diff === 1) return '내일';
+  return `D-${diff}`;
+};
+
 const getProgramStatus = (p) => {
-  if (p.manualStatus) return p.manualStatus; // 관리자가 '추첨완료'를 눌렀을 때
-  
-  const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
-  
+  if (p.manualStatus) return p.manualStatus; 
+  const today = new Date().toISOString().split('T')[0];
   if (p.date < today) return '종료';
   if (p.deadline < today) return '모집마감';
   return '모집중';
@@ -113,7 +126,6 @@ export default function TherapyApp() {
   const [filterLoc, setFilterLoc] = useState('전체');
   const [searchQ, setSearchQ] = useState('');
 
-  // Dummy Data
   const [programs, setPrograms] = useState([
     {
       id: 1, title: '근골격계 예방 테라피', category: '물리치료',
@@ -125,7 +137,7 @@ export default function TherapyApp() {
     },
     {
       id: 2, title: '스트레칭 & 자세교정', category: '자세교정',
-      location: '부천사업소', date: '2026-05-15', deadline: '2026-04-20', time: '13:00~16:00', // 기한 지남 (모집마감 테스트용)
+      location: '부천사업소', date: '2026-05-15', deadline: '2026-04-20', time: '13:00~16:00',
       capacity: 15, applied: 18, rating: 4.8, manualStatus: null,
       therapist: { name: '박성호', role: '운동처방사', exp: '10년', avatar: 'PS' },
       desc: '사무직 대상 거북목·라운드숄더 교정 스트레칭 프로그램입니다.',
@@ -133,7 +145,7 @@ export default function TherapyApp() {
     },
     {
       id: 3, title: '아로마 릴렉싱 테라피', category: '휴식요법',
-      location: '서울사업소', date: '2026-04-10', deadline: '2026-04-05', time: '15:00~18:00', // 날짜 지남 (종료 테스트용)
+      location: '서울사업소', date: '2026-04-10', deadline: '2026-04-05', time: '15:00~18:00',
       capacity: 10, applied: 10, rating: 5.0, manualStatus: null,
       therapist: { name: '이수민', role: '아로마테라피스트', exp: '8년', avatar: 'LS' },
       desc: '심신의 긴장 완화를 위한 프리미엄 아로마 릴렉싱 세션입니다.',
@@ -212,15 +224,18 @@ export default function TherapyApp() {
           <div className="w-full max-w-[440px] a-slide-up relative z-10">
             <div className="flex justify-center mb-12"><div className="bg-white/90 backdrop-blur-xl px-6 py-4 rounded-3xl shadow-sm border border-white"><GSLogo size={36} /></div></div>
             <div className="text-center mb-14">
-              <h1 className="text-[40px] font-black tracking-tight text-[#0A1628] mb-5 leading-tight">건강한 당신이<br/><span className="bg-gradient-to-r from-[#F47B20] via-[#1B3A6B] to-[#5CB85C] bg-clip-text text-transparent">곧 건강한 회사입니다</span></h1>
-              <p className="text-[14px] text-[#64748B] font-medium">근골격계 전문 테라피 프로그램<br/>임직원 인증 후 이용 가능합니다</p>
+              <h1 className="text-[40px] md:text-[44px] leading-[1.05] font-black tracking-tight text-[#0A1628] mb-5">건강한 당신이<br/><span className="bg-gradient-to-r from-[#F47B20] via-[#1B3A6B] to-[#5CB85C] bg-clip-text text-transparent">곧 건강한 회사입니다</span></h1>
+              <p className="text-[14px] md:text-[15px] text-[#64748B] leading-relaxed font-medium">근골격계 전문 테라피 프로그램<br/>임직원 인증 후 이용 가능합니다</p>
             </div>
             <form onSubmit={handleLogin} className="space-y-3">
-              <div className="bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
-                <div className="px-5 py-2 border-b border-gray-50"><label className="text-[10px] font-bold text-gray-400">성함</label><input value={loginForm.name} onChange={e => setLoginForm({ ...loginForm, name: e.target.value })} placeholder="홍길동" className="w-full bg-transparent text-[16px] font-semibold outline-none" /></div>
-                <div className="px-5 py-2"><label className="text-[10px] font-bold text-gray-400">사번</label><input value={loginForm.empId} onChange={e => setLoginForm({ ...loginForm, empId: e.target.value })} placeholder="GP12345" className="w-full bg-transparent text-[16px] font-semibold outline-none" /></div>
+              <div className="bg-white rounded-2xl p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.04)] border border-gray-100">
+                <div className="px-5 py-2 border-b border-gray-50"><label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">성함</label><input value={loginForm.name} onChange={e => setLoginForm({ ...loginForm, name: e.target.value })} placeholder="홍길동" className="w-full mt-0.5 bg-transparent text-[16px] font-semibold outline-none" /></div>
+                <div className="px-5 py-2"><label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">사번</label><input value={loginForm.empId} onChange={e => setLoginForm({ ...loginForm, empId: e.target.value })} placeholder="GP12345" className="w-full mt-0.5 bg-transparent text-[16px] font-semibold outline-none" /></div>
               </div>
-              <button type="submit" className="w-full bg-[#0A1628] text-white rounded-2xl py-5 font-bold text-[15px] shadow-lg active:scale-95 transition-all">프로그램 둘러보기</button>
+              <button type="submit" className="w-full group relative bg-[#0A1628] text-white rounded-2xl py-5 font-bold text-[15px] overflow-hidden active:scale-[0.98] transition-transform shadow-[0_12px_32px_rgba(10,22,40,0.25)]">
+                <div className="absolute inset-0 bg-gradient-to-r from-[#F47B20] via-[#1B3A6B] to-[#5CB85C] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <span className="relative flex items-center justify-center gap-2">프로그램 둘러보기<ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" /></span>
+              </button>
             </form>
             <div className="mt-10 text-center"><button onClick={() => setShowAdminGate(true)} className="inline-flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-[#1B3A6B] font-semibold"><Shield size={12} />관리자 접속</button></div>
           </div>
@@ -240,7 +255,7 @@ export default function TherapyApp() {
         
         {/* Desktop Sidebar */}
         <aside className="hidden lg:flex flex-col w-[260px] bg-white border-r border-gray-100 sticky top-0 h-screen p-6">
-          <div className="mb-10"><GSLogo size={34} /></div>
+          <div className="mb-10"><GSLogo size={34} onClick={() => setCurrentTab('home')} /></div>
           <nav className="space-y-1 flex-1">
             {[ { id: 'home', icon: Home, label: '홈' }, { id: 'programs', icon: Activity, label: '프로그램' }, { id: 'my', icon: Heart, label: '내 신청 내역', badge: myApplications.length }, ...(isAdmin ? [{ id: 'admin', icon: BarChart3, label: '관리자 대시보드' }] : []) ].map(item => (
               <button key={item.id} onClick={() => setCurrentTab(item.id)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-[13px] font-bold transition-all ${currentTab === item.id ? 'bg-[#0A1628] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -257,7 +272,7 @@ export default function TherapyApp() {
         <main className="flex-1 min-w-0 pb-24 lg:pb-8">
           {/* Mobile Top Bar */}
           <div className="lg:hidden sticky top-0 z-30 bg-[#FAFAF7]/90 backdrop-blur-xl border-b border-gray-100 px-5 py-3 flex items-center justify-between">
-            <GSLogo size={28} />
+            <GSLogo size={28} onClick={() => setCurrentTab('home')} />
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#F47B20] to-[#1B3A6B] flex items-center justify-center text-white font-black text-[13px]">{user.name.charAt(0)}</div>
           </div>
 
@@ -465,7 +480,7 @@ const AdminGate = ({ pw, setPw, onSubmit, onClose }) => (
 const AdminPanel = ({ programs, setPrograms, colorMap, onRunLottery }) => {
   const [form, setForm] = useState({
     titleType: '근골격계 테라피', customTitle: '', category: '물리치료', 
-    location: '안양사업소', date: '', deadline: '', capacity: '', // deadline 추가됨!
+    location: '안양사업소', date: '', deadline: '', capacity: '',
     therapistName: '', therapistRole: '물리치료사', desc: ''
   });
 
