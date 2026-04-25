@@ -8,10 +8,11 @@
     "start": "next start",
     "lint": "eslint"
   },
-    "dependencies": {
+  "dependencies": {
     "lucide-react": "latest",
     "next": "16.2.4",
     "react": "19.2.4",
+    "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
