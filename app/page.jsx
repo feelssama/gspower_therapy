@@ -14,7 +14,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ══════════════════════════════════════════════════════════
-// GS파워 로고 (시인성 강화 버전)
+// GS파워 로고
 // ══════════════════════════════════════════════════════════
 const GSLogo = ({ size = 60, onClick }) => {
   const [imgError, setImgError] = useState(false);
@@ -97,33 +97,48 @@ export default function TherapyApp() {
   const [filterLoc, setFilterLoc] = useState('전체');
   const [searchQ, setSearchQ] = useState('');
 
-  // 🔥 [업데이트] 관리자 및 임직원 초기 명단 세팅
-  const [registeredUsers, setRegisteredUsers] = useState([
-    { name: '이주필', empId: 'C800440' },
-    { name: '전국현', empId: 'C800488' },
-    { name: '신민철', empId: 'C800461' }
-  ]);
-
-  const [programs, setPrograms] = useState([
-    {
-      id: 1, title: '근골격계 예방 테라피', category: '물리치료',
-      location: '안양사업소', date: '2026-05-20', deadline: '2026-05-15', time: '14:00~17:00',
-      capacity: 20, applied: 25, rating: 4.9, manualStatus: null,
-      therapist: { name: '김은정', role: '물리치료사', exp: '15년', avatar: 'KE' },
-      desc: '허리·목·어깨 만성 통증 완화를 위한 1:1 전문 물리치료 프로그램입니다.',
-      tags: ['허리통증', '목어깨', '1:1케어'], color: 'orange', duration: '50분/인'
-    }
-  ]);
-
+  const [registeredUsers, setRegisteredUsers] = useState([]);
+  const [programs, setPrograms] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
 
+  // 🔥 [버그 해결] DB 언어를 앱 언어로 번역해서 가져옵니다!
   useEffect(() => {
     const fetchRealData = async () => {
       if (supabaseUrl !== 'https://placeholder.supabase.co') {
-        const { data } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
-        if (data && data.length > 0) setPrograms(data);
+        
+        // 1. 프로그램 데이터 매핑 (therapist_name -> therapist.name)
+        const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
+        if (pData && pData.length > 0) {
+          const mappedPrograms = pData.map(p => ({
+            id: p.id,
+            title: p.title,
+            category: p.category || '물리치료',
+            location: p.location,
+            date: p.date,
+            deadline: p.deadline,
+            time: p.time,
+            capacity: p.capacity,
+            applied: p.applied,
+            rating: p.rating,
+            manualStatus: p.manual_status,
+            therapist: { name: p.therapist_name, role: p.therapist_role, exp: '5년', avatar: (p.therapist_name || 'G').charAt(0) },
+            desc: p.description,
+            tags: ['신규'],
+            color: p.color || 'orange',
+            duration: p.duration
+          }));
+          setPrograms(mappedPrograms);
+        }
+
+        // 2. 임직원 명단 매핑 (emp_id -> empId)
         const { data: users } = await supabase.from('registered_users').select('*');
-        if (users && users.length > 0) setRegisteredUsers(users);
+        if (users && users.length > 0) {
+          const mappedUsers = users.map(u => ({
+            name: u.name,
+            empId: u.emp_id // 여기서 언더바를 대문자 I로 번역해줍니다!
+          }));
+          setRegisteredUsers(mappedUsers);
+        }
       }
     };
     fetchRealData();
@@ -134,24 +149,38 @@ export default function TherapyApp() {
     if (!loginForm.name || !loginForm.empId) return alert('성함과 사번을 모두 입력해주세요.');
     const isValidUser = registeredUsers.find(u => u.name === loginForm.name && u.empId === loginForm.empId);
     if (isValidUser) setUser({ ...isValidUser });
-    else alert('등록되지 않은 임직원 정보입니다. 정보를 확인하시거나 관리자에게 문의하세요.');
+    else alert('등록되지 않은 임직원 정보입니다. 사번과 성함을 다시 확인하시거나 관리자에게 문의하세요.');
   };
 
   const handleAdminAuth = (e) => { e?.preventDefault(); if (adminPw === 'gspower1234') { setIsAdmin(true); setShowAdminGate(false); setAdminPw(''); if (user) setCurrentTab('admin'); } else { alert('비밀번호가 일치하지 않습니다.'); } };
   const openProgramDetail = (p) => { setSelectedProgram(p); setShowDetail(true); };
 
-  const applyProgram = () => {
+  // 프로그램 신청 로직 (로컬 + DB 업데이트)
+  const applyProgram = async () => {
     setShowConfirm(false); setShowDetail(false);
-    setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: p.applied + 1 } : p));
-    setMyApplications(prev => [...prev, { ...selectedProgram, applied: selectedProgram.applied + 1, appliedAt: new Date().toISOString(), status: 'pending' }]);
+    const updatedApplied = selectedProgram.applied + 1;
+    
+    // DB 업데이트
+    if (supabaseUrl !== 'https://placeholder.supabase.co') {
+      await supabase.from('programs').update({ applied: updatedApplied }).eq('id', selectedProgram.id);
+    }
+    
+    setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: updatedApplied } : p));
+    setMyApplications(prev => [...prev, { ...selectedProgram, applied: updatedApplied, appliedAt: new Date().toISOString(), status: 'pending' }]);
     setShowSuccess(true); setTimeout(() => setShowSuccess(false), 2800);
   };
 
-  const handleRunLottery = (id) => {
+  const handleRunLottery = async (id) => {
     const p = programs.find(x => x.id === id);
     const penaltyCount = Math.floor(p.applied * 0.3);
     const newCount = p.applied - penaltyCount;
     let msg = `<div class="text-left space-y-3 text-[14px] text-gray-700"><p><b class="text-black text-[16px]">${p.title}</b></p><p>총 신청: <b>${p.applied}명</b></p><p>✅ 추첨 로직에 따라 대상자 선정 완료</p></div>`;
+    
+    // DB 업데이트
+    if (supabaseUrl !== 'https://placeholder.supabase.co') {
+      await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', id);
+    }
+
     setLotteryResult(msg);
     setPrograms(prev => prev.map(item => item.id === id ? { ...item, manualStatus: "추첨완료" } : item));
   };
@@ -183,7 +212,7 @@ export default function TherapyApp() {
                 </div>
                 <div className="px-5 py-3">
                   <label className="text-[10px] font-bold uppercase text-gray-400">사번</label>
-                  <input value={loginForm.empId} onChange={e => setLoginForm({ ...loginForm, empId: e.target.value })} placeholder="C80XXXX" className="w-full mt-1 bg-transparent text-[18px] font-black text-black placeholder-gray-400 outline-none" />
+                  <input value={loginForm.empId} onChange={e => setLoginForm({ ...loginForm, empId: e.target.value.toUpperCase() })} placeholder="C80XXXX" className="w-full mt-1 bg-transparent text-[18px] font-black text-black placeholder-gray-400 outline-none" />
                 </div>
               </div>
               <button type="submit" className="w-full bg-[#0A1628] text-white rounded-2xl py-5 font-bold text-[15px] shadow-lg active:scale-[0.98] transition-transform">프로그램 둘러보기</button>
@@ -275,16 +304,57 @@ const MyTab = ({ myApplications, onCancel }) => (
 );
 
 const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers, colorMap, onRunLottery }) => {
-  const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', location: '안양사업소', date: '', deadline: '', capacity: '', therapistName: '' });
+  const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', location: '안양사업소', date: '', deadline: '', capacity: '', therapistName: '', category: '물리치료' });
   const [newUser, setNewUser] = useState({ name: '', empId: '' });
-  const createProgram = () => {
+  
+  // 🔥 [업데이트] DB Insert 풀 연동!
+  const createProgram = async () => {
     const finalTitle = form.titleType === '기타' ? form.customTitle : form.titleType;
-    setPrograms([{ id: Date.now(), title: finalTitle, location: form.location, date: form.date, deadline: form.deadline, capacity: parseInt(form.capacity), applied: 0, color: 'orange', therapist: { name: form.therapistName } }, ...programs]);
+    if (!finalTitle || !form.date || !form.deadline || !form.capacity || !form.therapistName) return alert('필수 입력 누락');
+    
+    const newP_DB = {
+      title: finalTitle, category: form.category, location: form.location,
+      date: form.date, deadline: form.deadline, time: '14:00~17:00', capacity: parseInt(form.capacity),
+      applied: 0, rating: 5.0, therapist_name: form.therapistName, therapist_role: '물리치료사',
+      description: '전문가와 함께하는 프로그램입니다.', color: form.location.includes('안양') ? 'orange' : form.location.includes('부천') ? 'blue' : 'green', duration: '50분/인'
+    };
+
+    if (supabaseUrl !== 'https://placeholder.supabase.co') {
+      await supabase.from('programs').insert([newP_DB]);
+    }
+    
+    // 화면 즉시 반영 (새로고침 전에도 보이게)
+    setPrograms([{ id: Date.now(), ...newP_DB, therapist: { name: form.therapistName, role: '물리치료사', exp: '5년', avatar: form.therapistName.charAt(0) } }, ...programs]);
+    alert('게시 성공!');
   };
-  const handleAddUser = () => {
-    setRegisteredUsers([{ ...newUser }, ...registeredUsers]);
+
+  const handleAddUser = async () => {
+    if (!newUser.name || !newUser.empId) return;
+    const exists = registeredUsers.find(u => u.empId === newUser.empId);
+    if (exists) return alert('이미 등록된 사번입니다.');
+    
+    if (supabaseUrl !== 'https://placeholder.supabase.co') {
+      await supabase.from('registered_users').insert([{ name: newUser.name, emp_id: newUser.empId.toUpperCase() }]);
+    }
+
+    setRegisteredUsers([{ name: newUser.name, empId: newUser.empId.toUpperCase() }, ...registeredUsers]);
     setNewUser({ name: '', empId: '' });
   };
+
+  const handleRemoveUser = async (empId) => {
+    if (supabaseUrl !== 'https://placeholder.supabase.co') {
+      await supabase.from('registered_users').delete().eq('emp_id', empId);
+    }
+    setRegisteredUsers(registeredUsers.filter(x => x.empId !== empId));
+  };
+
+  const handleDeleteProgram = async (id) => {
+    if (supabaseUrl !== 'https://placeholder.supabase.co') {
+      await supabase.from('programs').delete().eq('id', id);
+    }
+    setPrograms(programs.filter(x => x.id !== id));
+  };
+
   const inputCls = "w-full bg-gray-50 border border-transparent rounded-xl px-3.5 py-3 text-[13px] font-black text-black placeholder-gray-400 outline-none focus:bg-white focus:border-[#0A1628]";
   return (
     <div className="space-y-6 a-fade">
@@ -300,7 +370,7 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
           {registeredUsers.map((u, i) => (
             <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-50">
               <div><span className="font-black text-[13px] text-[#0A1628] block">{u.name}</span><span className="text-[10px] text-gray-400 font-bold">{u.empId}</span></div>
-              <button onClick={() => setRegisteredUsers(registeredUsers.filter(x => x.empId !== u.empId))} className="text-gray-400 hover:text-red-500"><X size={14}/></button>
+              <button onClick={() => handleRemoveUser(u.empId)} className="text-gray-400 hover:text-red-500"><X size={14}/></button>
             </div>
           ))}
         </div>
@@ -312,6 +382,7 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
           <Field label="실시 일자 *"><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className={inputCls} /></Field>
           <Field label="신청 기한 *"><input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className={inputCls} /></Field>
           <Field label="정원 *"><input type="number" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })} className={inputCls} /></Field>
+          <Field label="담당자명 *"><input value={form.therapistName} onChange={e => setForm({ ...form, therapistName: e.target.value })} className={inputCls} /></Field>
         </div>
         <button onClick={createProgram} className="mt-5 bg-[#0A1628] text-white px-8 py-3.5 rounded-xl font-black text-[13px]">게시하기</button>
       </div>
@@ -322,7 +393,7 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
             <div><div className="flex items-center gap-2 mb-1"><h4 className="text-[14px] font-black">{p.title}</h4><StatusBadge status={status} /></div><div className="text-[11px] text-gray-400 font-semibold">{p.location} · {p.applied}/{p.capacity}명</div></div>
             <div className="flex gap-2">
               {status === '모집마감' && <button onClick={() => onRunLottery(p.id)} className="bg-[#F47B20] text-white px-4 py-2 rounded-xl text-[11px] font-bold">추첨 실행</button>}
-              <button onClick={() => setPrograms(programs.filter(x => x.id !== p.id))} className="bg-red-50 text-red-500 px-3 py-2 rounded-xl text-[11px] font-bold">삭제</button>
+              <button onClick={() => handleDeleteProgram(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-xl text-[11px] font-bold">삭제</button>
             </div>
           </div>
         );
@@ -340,12 +411,12 @@ const StatCard = ({ icon: Icon, label, value, suffix, accent }) => (
 );
 
 const CompactCard = ({ program, onClick, colorMap }) => {
-  const c = colorMap[program.color];
+  const c = colorMap[program.color] || colorMap['orange'];
   const status = getProgramStatus(program);
   const pct = Math.min(100, (program.applied / program.capacity) * 100);
   return (
     <button onClick={onClick} className="w-full text-left bg-white rounded-2xl p-5 border border-gray-100 hover:shadow-lg transition-all">
-      <div className="flex justify-between items-center mb-4"><span className={`${c.bg} ${c.text} px-2.5 py-1 rounded-lg text-[10px] font-black`}>물리치료</span><StatusBadge status={status} /></div>
+      <div className="flex justify-between items-center mb-4"><span className={`${c.bg} ${c.text} px-2.5 py-1 rounded-lg text-[10px] font-black`}>{program.category}</span><StatusBadge status={status} /></div>
       <h3 className="text-[16px] font-black text-[#0A1628] leading-snug mb-3">{program.title}</h3>
       <div className="space-y-1 mb-4 text-[11px] text-gray-500 font-semibold"><div className="flex gap-1.5"><MapPin size={10} />{program.location}</div><div className="flex gap-1.5"><Calendar size={10} />{formatDate(program.date)}</div></div>
       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: c.solid }} /></div>
