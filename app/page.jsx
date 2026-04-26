@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import {
   Shield, Calendar, MapPin, Clock, Users, ArrowRight, Check, X,
   ChevronRight, Plus, Home, Bell, Sparkles, Activity, TrendingUp,
-  BarChart3, LogOut, Search, Star, Award, Heart, Stethoscope, Dna, UserPlus, ThumbsUp
+  BarChart3, LogOut, Search, Star, Award, Heart, Stethoscope, Dna, UserPlus, ThumbsUp, Edit2
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -148,7 +148,7 @@ export default function TherapyApp() {
     e?.preventDefault(); 
     const u = registeredUsers.find(u => u.name === loginForm.name && u.empId === loginForm.empId.toUpperCase());
     if (u) setUser({ ...u });
-    else alert('등록되지 않은 정보입니다.');
+    else alert('등록되지 않은 정보입니다. 사번과 성함을 확인해주세요.');
   };
 
   const handleAdminAuth = (e) => { 
@@ -162,11 +162,10 @@ export default function TherapyApp() {
     const updatedApplied = selectedProgram.applied + 1;
     if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').update({ applied: updatedApplied }).eq('id', selectedProgram.id);
     setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: updatedApplied } : p));
-    setMyApplications(prev => [...prev, { ...selectedProgram, applied: updatedApplied, appliedAt: new Date().toISOString() }]);
+    setMyApplications(prev => [...prev, { ...selectedProgram, applied: updatedApplied, appliedAt: new Date().toISOString(), status: 'pending' }]);
     setShowSuccess(true); setTimeout(() => setShowSuccess(false), 2800);
   };
 
-  // 🔥 [신규 추가] 평점 등록 기능 로직
   const handleRate = async (programId, newRating) => {
     if (supabaseUrl !== 'https://placeholder.supabase.co') {
       await supabase.from('programs').update({ rating: newRating }).eq('id', programId);
@@ -189,6 +188,9 @@ export default function TherapyApp() {
     green:  { bg: 'bg-[#EFF8EC]', dot: 'bg-[#5CB85C]', text: 'text-[#2E7D32]', solid: '#5CB85C', soft: 'from-[#D4EDC9] to-[#EFF8EC]' },
   };
 
+  // ═══════════════════════════════════════════════════
+  // 로그인 화면
+  // ═══════════════════════════════════════════════════
   if (!user) {
     return (
       <>
@@ -222,6 +224,9 @@ export default function TherapyApp() {
     );
   }
 
+  // ═══════════════════════════════════════════════════
+  // 메인 렌더링
+  // ═══════════════════════════════════════════════════
   return (
     <>
       <GlobalStyles />
@@ -280,6 +285,26 @@ export default function TherapyApp() {
           </div>
         </div>
       )}
+      {showNotifications && (
+        <div className="fixed inset-0 z-[70] flex items-start justify-end bg-black/30 backdrop-blur-sm a-fade" onClick={() => setShowNotifications(false)}>
+          <div className="w-full lg:w-[400px] h-full bg-white a-from-right" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div><h3 className="text-[18px] font-black text-[#0A1628]">알림</h3></div>
+              <button onClick={() => setShowNotifications(false)} className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center"><X size={14} className="text-gray-500" /></button>
+            </div>
+            <div className="p-4 space-y-2">
+              {notifications.map(n => (
+                <div key={n.id} className="p-4 rounded-2xl hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${n.type === 'warning' ? 'bg-[#F47B20]' : 'bg-[#5CB85C]'}`} />
+                    <div><p className="text-[13px] font-bold text-[#0A1628]">{n.text}</p><p className="text-[11px] text-gray-400 font-semibold mt-1">{n.time}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -329,7 +354,6 @@ const ProgramsTab = ({ filtered, colorMap, searchQ, setSearchQ, filterLoc, setFi
   </div>
 );
 
-// 🔥 [평점 입력 기능 UI 추가]
 const MyTab = ({ myApplications, colorMap, onCancel, onRate, onGoPrograms }) => (
   <div className="space-y-6 a-fade">
     <h1 className="text-[28px] font-black text-[#0A1628]">내 신청 내역</h1>
@@ -344,7 +368,6 @@ const MyTab = ({ myApplications, colorMap, onCancel, onRate, onGoPrograms }) => 
               <span className="bg-green-50 text-green-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase">신청완료</span>
             </div>
             
-            {/* 평점 남기기 섹션 */}
             <div className="bg-gray-50 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-2"><ThumbsUp size={14} className="text-[#F47B20]"/><span className="text-[12px] font-black text-gray-600">참여하신 테라피는 어떠셨나요? 평점을 남겨주세요!</span></div>
               <div className="flex gap-1">
@@ -436,11 +459,15 @@ const AdminGate = ({ pw, setPw, onSubmit, onClose }) => (
 );
 
 // ══════════════════════════════════════════════════════════
-// Admin Dashboard
+// Admin Dashboard (🔥 프로그램 수정 Edit 기능 100% 탑재!)
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers, colorMap, onRunLottery }) => {
-  const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
+  const defaultForm = { titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' };
+  const [form, setForm] = useState(defaultForm);
   const [newUser, setNewUser] = useState({ name: '', empId: '' });
+  
+  // 🔥 [수정 기능] 어떤 프로그램을 고치고 있는지 기억하는 저장소
+  const [editingId, setEditingId] = useState(null);
 
   const handleAddUser = async () => {
     if (!newUser.name || !newUser.empId) return;
@@ -451,16 +478,53 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
     setNewUser({ name: '', empId: '' });
   };
 
-  const handleCreate = async () => {
+  // 🔥 [수정 기능] '수정' 버튼을 눌렀을 때 폼에 기존 데이터를 착! 넣어주는 로직
+  const handleEditClick = (p) => {
+    setEditingId(p.id);
+    setForm({
+      titleType: (p.title === '근골격계 테라피' || p.title === '스트레칭 클래스') ? p.title : '기타',
+      customTitle: (p.title !== '근골격계 테라피' && p.title !== '스트레칭 클래스') ? p.title : '',
+      category: p.category || '물리치료',
+      location: p.location,
+      date: p.date,
+      deadline: p.deadline,
+      capacity: p.capacity,
+      therapistName: p.therapist.name,
+      desc: p.desc || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // 맨 위로 부드럽게 올려줌
+  };
+
+  // 🔥 [수정 기능] 저장 버튼 (게시 / 업데이트) 로직
+  const handleSubmit = async () => {
     const title = form.titleType === '기타' ? form.customTitle : form.titleType;
-    const newP = {
-      title, location: form.location, date: form.date, deadline: form.deadline, capacity: parseInt(form.capacity),
-      applied: 0, therapist_name: form.therapistName, description: form.desc || '건강 테라피 세션입니다.',
+    if (!title || !form.date || !form.deadline || !form.capacity) return alert('필수 값을 모두 입력하세요.');
+
+    const payload = {
+      title, location: form.location, category: form.category, 
+      date: form.date, deadline: form.deadline, capacity: parseInt(form.capacity),
+      therapist_name: form.therapistName, description: form.desc || '건강 테라피 세션입니다.',
       color: form.location.includes('안양') ? 'orange' : form.location.includes('부천') ? 'blue' : 'green'
     };
-    if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').insert([newP]);
-    alert('게시 완료!');
-    window.location.reload(); // 리프레시하여 반영
+
+    if (editingId) {
+      // ✏️ 수정(Update) 로직
+      if (supabaseUrl !== 'https://placeholder.supabase.co') {
+        await supabase.from('programs').update(payload).eq('id', editingId);
+      }
+      setPrograms(prev => prev.map(p => p.id === editingId ? { ...p, ...payload, therapist: { ...p.therapist, name: form.therapistName, avatar: form.therapistName.charAt(0) } } : p));
+      alert('프로그램 수정 완료!');
+      setEditingId(null);
+    } else {
+      // 📝 신규 개설(Insert) 로직
+      payload.applied = 0;
+      if (supabaseUrl !== 'https://placeholder.supabase.co') {
+        await supabase.from('programs').insert([payload]);
+      }
+      alert('신규 게시 완료!');
+      window.location.reload(); 
+    }
+    setForm({...defaultForm});
   };
 
   const inputCls = "w-full bg-gray-50 border-2 border-transparent rounded-2xl px-4 py-3 text-[14px] font-black text-black outline-none focus:bg-white focus:border-[#0A1628] transition-all";
@@ -489,27 +553,44 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-        <h3 className="font-black mb-4 flex items-center gap-2"><Plus size={18}/> 새 테라피 개설</h3>
+      {/* 🔥 [수정 기능] 입력 폼: 수정 모드일 때는 주황색 강조 표시! */}
+      <div className={`bg-white rounded-3xl p-6 border shadow-sm transition-colors ${editingId ? 'border-[#F47B20] ring-4 ring-[#F47B20]/10' : 'border-gray-100'}`}>
+        <h3 className="font-black mb-4 flex items-center gap-2">
+          {editingId ? <><Edit2 size={18} className="text-[#F47B20]" /> 프로그램 수정 (Edit Mode)</> : <><Plus size={18} className="text-[#0A1628]" /> 새 테라피 개설</>}
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="프로그램 명"><select value={form.titleType} onChange={e => setForm({...form, titleType: e.target.value})} className={inputCls}><option>근골격계 테라피</option><option>스트레칭 클래스</option><option>기타</option></select></Field>
           {form.titleType === '기타' && <Field label="직접 입력"><input value={form.customTitle} onChange={e => setForm({...form, customTitle: e.target.value})} className={inputCls} /></Field>}
+          <Field label="분류 (Category)"><select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className={inputCls}><option>물리치료</option><option>자세교정</option><option>휴식요법</option></select></Field>
           <Field label="장소"><select value={form.location} onChange={e => setForm({...form, location: e.target.value})} className={inputCls}><option>부천사업소</option><option>안양사업소</option><option>서울사업소</option></select></Field>
           <Field label="실시일"><input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className={inputCls} /></Field>
           <Field label="신청마감일"><input type="date" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className={inputCls} /></Field>
           <Field label="모집정원"><input type="number" value={form.capacity} onChange={e => setForm({...form, capacity: e.target.value})} className={inputCls} /></Field>
           <Field label="강사명"><input value={form.therapistName} onChange={e => setForm({...form, therapistName: e.target.value})} className={inputCls} /></Field>
         </div>
-        <button onClick={handleCreate} className="w-full mt-6 bg-[#0A1628] text-white py-4 rounded-2xl font-black shadow-lg">프로그램 게시하기</button>
+        
+        {/* 🔥 [수정 기능] 버튼 영역: 수정 중일 땐 '취소'와 '저장' 버튼 등장! */}
+        {editingId ? (
+          <div className="flex gap-2 mt-6">
+            <button onClick={() => { setEditingId(null); setForm({...defaultForm}); }} className="flex-1 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black active:scale-95 transition-transform">취소</button>
+            <button onClick={handleSubmit} className="flex-[2] bg-[#F47B20] text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-transform">수정 내용 저장</button>
+          </div>
+        ) : (
+          <button onClick={handleSubmit} className="w-full mt-6 bg-[#0A1628] text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-transform">프로그램 게시하기</button>
+        )}
       </div>
 
       <div className="space-y-3">
         <h3 className="font-black text-[#0A1628]">프로그램 운영 현황</h3>
         {programs.map(p => (
-          <div key={p.id} className="bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center">
+          <div key={p.id} className="bg-white p-5 rounded-2xl border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
             <div><div className="flex items-center gap-2"><h4 className="font-black text-[15px]">{p.title}</h4><StatusBadge status={getProgramStatus(p)}/></div><p className="text-[11px] text-gray-400 font-bold mt-1">{p.location} · {p.applied}/{p.capacity}명 신청</p></div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               {getProgramStatus(p) === '모집마감' && <button onClick={() => onRunLottery(p.id)} className="bg-[#F47B20] text-white px-4 py-2 rounded-xl text-[11px] font-black shadow-md">추첨 실행</button>}
+              
+              {/* 🔥 [수정 기능] 목록에 파란색 '수정' 버튼 추가! */}
+              <button onClick={() => handleEditClick(p)} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[11px] font-black">수정</button>
+              
               <button onClick={async () => {
                 if(confirm('삭제할까요?')) {
                   if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').delete().eq('id', p.id);
