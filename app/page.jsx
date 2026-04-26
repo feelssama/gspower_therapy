@@ -5,31 +5,28 @@ import { useState, useEffect } from 'react';
 import {
   Shield, Calendar, MapPin, Clock, Users, ArrowRight, Check, X,
   ChevronRight, Plus, Home, Bell, Sparkles, Activity, TrendingUp,
-  BarChart3, LogOut, Search, Star, Award, Heart, Stethoscope, Dna
+  BarChart3, LogOut, Search, Star, Award, Heart, Stethoscope, Dna, UserPlus
 } from 'lucide-react';
+// 🔥 [Supabase 락 해제] 데이터베이스 연결 부품 로드
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ══════════════════════════════════════════════════════════
-// GS파워 로고 (로컬 이미지 완벽 지원 + 에러 시 텍스트 전환 + 홈 라우팅)
+// GS파워 로고
 // ══════════════════════════════════════════════════════════
-const GSLogo = ({ size = 36, onClick }) => {
+const GSLogo = ({ size = 60, onClick }) => {
   const [imgError, setImgError] = useState(false);
   return (
-    <div 
-      onClick={onClick} 
-      className={`flex items-center gap-1.5 ${onClick ? 'cursor-pointer active:scale-95 transition-transform hover:opacity-80' : ''}`}
-    >
+    <div onClick={onClick} className={`flex items-center gap-2 ${onClick ? 'cursor-pointer active:scale-95 transition-transform hover:opacity-80' : ''}`}>
       {!imgError ? (
-        <img 
-          src="/logo.png" 
-          alt="GS 파워" 
-          style={{ height: size * 0.85, width: 'auto' }} 
-          className="flex-shrink-0 object-contain"
-          onError={() => setImgError(true)} 
-        />
+        <img src="/logo.png" alt="GS 파워" style={{ height: size * 0.9, width: 'auto' }} className="flex-shrink-0 object-contain" onError={() => setImgError(true)} />
       ) : (
         <div className="flex items-baseline gap-[2px] ml-0.5" style={{ transform: 'translateY(1px)' }}>
-          <span className="font-black tracking-tighter" style={{ color: '#2B4C8C', fontSize: size * 0.65, fontFamily: 'Arial, sans-serif' }}>GS</span>
-          <span className="font-bold tracking-tight text-[#555555]" style={{ fontSize: size * 0.6, fontFamily: "'Pretendard Variable', sans-serif" }}>파워</span>
+          <span className="font-black tracking-tighter" style={{ color: '#2B4C8C', fontSize: size * 0.7, fontFamily: 'Arial, sans-serif' }}>GS</span>
+          <span className="font-bold tracking-tight text-[#555555]" style={{ fontSize: size * 0.65, fontFamily: "'Pretendard Variable', sans-serif" }}>파워</span>
         </div>
       )}
     </div>
@@ -44,32 +41,25 @@ const GlobalStyles = () => (
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
     html, body, #root { font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
     * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideFromBottom { from { transform: translateY(100%); } to { transform: translateY(0); } }
     @keyframes zoomIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
-
     .a-fade { animation: fadeIn .3s ease-out both; }
     .a-slide-up { animation: slideUp .45s cubic-bezier(0.16,1,0.3,1) both; }
     .a-sheet { animation: slideFromBottom .4s cubic-bezier(0.16,1,0.3,1) both; }
     .a-zoom { animation: zoomIn .4s cubic-bezier(0.16,1,0.3,1) both; }
-
     .stagger > * { opacity: 0; animation: slideUp .5s cubic-bezier(0.16,1,0.3,1) forwards; }
     .stagger > *:nth-child(1) { animation-delay: .05s; }
     .stagger > *:nth-child(2) { animation-delay: .1s; }
     .stagger > *:nth-child(3) { animation-delay: .15s; }
     .stagger > *:nth-child(4) { animation-delay: .2s; }
-    
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .line-clamp-2-fallback { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   `}</style>
 );
 
-// ══════════════════════════════════════════════════════════
-// Helpers & Logic
-// ══════════════════════════════════════════════════════════
 const formatDate = (iso) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -102,11 +92,7 @@ const StatusBadge = ({ status }) => {
     '추첨완료': 'bg-purple-100 text-purple-700 border border-purple-200',
     '종료': 'bg-gray-100 text-gray-500 border border-gray-200'
   };
-  return (
-    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black ${colors[status]}`}>
-      {status}
-    </span>
-  );
+  return <span className={`px-2.5 py-1 rounded-md text-[10px] font-black ${colors[status]}`}>{status}</span>;
 };
 
 // ══════════════════════════════════════════════════════════
@@ -128,6 +114,12 @@ export default function TherapyApp() {
   const [filterLoc, setFilterLoc] = useState('전체');
   const [searchQ, setSearchQ] = useState('');
 
+  // 🔥 [신규 추가] 임직원 사전 등록 명단 상태 (Supabase 연동 예정)
+  const [registeredUsers, setRegisteredUsers] = useState([
+    { name: '홍길동', empId: 'GP12345' },
+    { name: '이주필', empId: 'GP77777' } // 기본 테스트 계정!
+  ]);
+
   const [programs, setPrograms] = useState([
     {
       id: 1, title: '근골격계 예방 테라피', category: '물리치료',
@@ -144,23 +136,39 @@ export default function TherapyApp() {
       therapist: { name: '박성호', role: '운동처방사', exp: '10년', avatar: 'PS' },
       desc: '사무직 대상 거북목·라운드숄더 교정 스트레칭 프로그램입니다.',
       tags: ['거북목', '자세교정', '사무직'], color: 'blue', duration: '40분/인'
-    },
-    {
-      id: 3, title: '아로마 릴렉싱 테라피', category: '휴식요법',
-      location: '서울사업소', date: '2026-04-10', deadline: '2026-04-05', time: '15:00~18:00',
-      capacity: 10, applied: 10, rating: 5.0, manualStatus: null,
-      therapist: { name: '이수민', role: '아로마테라피스트', exp: '8년', avatar: 'LS' },
-      desc: '심신의 긴장 완화를 위한 프리미엄 아로마 릴렉싱 세션입니다.',
-      tags: ['스트레스', '수면개선', '힐링'], color: 'green', duration: '60분/인'
-    },
+    }
   ]);
 
   const [myApplications, setMyApplications] = useState([]);
-  const notifications = [
-    { id: 1, text: '5/20 안양 프로그램 마감이 임박했습니다', time: '1시간 전', type: 'warning' },
-  ];
+  const notifications = [{ id: 1, text: '5/20 안양 프로그램 마감이 임박했습니다', time: '1시간 전', type: 'warning' }];
 
-  const handleLogin = (e) => { e?.preventDefault(); if (!loginForm.name || !loginForm.empId) return; setUser({ ...loginForm }); };
+  useEffect(() => {
+    const fetchRealData = async () => {
+      if (supabaseUrl !== 'https://placeholder.supabase.co') {
+        const { data, error } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
+        if (data && data.length > 0) setPrograms(data);
+      }
+    };
+    fetchRealData();
+  }, []);
+
+  // 🔥 [수정] 사전 등록 여부 검증 로직 추가
+  const handleLogin = (e) => { 
+    e?.preventDefault(); 
+    if (!loginForm.name || !loginForm.empId) {
+      return alert('성함과 사번을 모두 입력해주세요.');
+    }
+    
+    // 명단에서 검색
+    const isValidUser = registeredUsers.find(u => u.name === loginForm.name && u.empId === loginForm.empId);
+    
+    if (isValidUser) {
+      setUser({ ...isValidUser });
+    } else {
+      alert('등록되지 않은 임직원 정보입니다. 사번과 성함을 다시 확인하시거나 관리자에게 문의하세요.');
+    }
+  };
+
   const handleAdminAuth = (e) => { e?.preventDefault(); if (adminPw === 'gspower1234') { setIsAdmin(true); setShowAdminGate(false); setAdminPw(''); if (user) setCurrentTab('admin'); } else { alert('비밀번호가 일치하지 않습니다.'); } };
   const openProgramDetail = (p) => { setSelectedProgram(p); setShowDetail(true); };
 
@@ -181,19 +189,9 @@ export default function TherapyApp() {
     const penaltyCount = Math.floor(p.applied * 0.3);
     const newCount = p.applied - penaltyCount;
 
-    let msg = `<div class="text-left space-y-3 text-[14px] text-gray-700">`;
-    msg += `<p><b class="text-[#0A1628] text-[16px]">${p.title} (${p.location})</b></p>`;
-    msg += `<p>총 신청 인원: <b>${p.applied}명</b> (정원 ${p.capacity}명)</p>`;
-    msg += `<div class="bg-gray-50 p-3 rounded-lg border border-gray-200">`;
-    msg += `<p>• 직전 참여 제외(Waitlist): <span class="text-[#F47B20] font-bold">${penaltyCount}명</span></p>`;
-    msg += `<p>• 1순위 신규 신청자: <b class="text-[#1B3A6B]">${newCount}명</b></p></div>`;
-
-    if (newCount >= p.capacity) {
-      msg += `<p class="text-[#5CB85C] font-black text-[15px] pt-2">✅ 1순위 대상자 중 무작위 ${p.capacity}명 선정 완료</p>`;
-    } else {
-      msg += `<p class="text-[#5CB85C] font-black text-[15px] pt-2">✅ 1순위 전원 선발 후, 부족한 ${p.capacity - newCount}명을 대기자에서 추가 선정 완료</p>`;
-    }
-    msg += `</div>`;
+    let msg = `<div class="text-left space-y-3 text-[14px] text-gray-700"><p><b class="text-black text-[16px]">${p.title} (${p.location})</b></p><p>총 신청 인원: <b>${p.applied}명</b> (정원 ${p.capacity}명)</p><div class="bg-gray-50 p-3 rounded-lg border border-gray-200"><p>• 직전 참여 제외(Waitlist): <span class="text-[#F47B20] font-bold">${penaltyCount}명</span></p><p>• 1순위 신규 신청자: <b class="text-[#1B3A6B]">${newCount}명</b></p></div>`;
+    if (newCount >= p.capacity) msg += `<p class="text-[#5CB85C] font-black text-[15px] pt-2">✅ 1순위 대상자 중 무작위 ${p.capacity}명 선정 완료</p></div>`;
+    else msg += `<p class="text-[#5CB85C] font-black text-[15px] pt-2">✅ 1순위 전원 선발 후, 부족한 ${p.capacity - newCount}명을 대기자에서 추가 선정 완료</p></div>`;
 
     setLotteryResult(msg);
     setPrograms(prev => prev.map(item => item.id === id ? { ...item, manualStatus: "추첨완료" } : item));
@@ -224,22 +222,27 @@ export default function TherapyApp() {
             <div className="absolute top-1/2 -right-40 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-[#5B8FD9]/20 to-transparent blur-3xl" />
           </div>
           <div className="w-full max-w-[440px] a-slide-up relative z-10">
-            <div className="flex justify-center mb-12"><div className="bg-white/90 backdrop-blur-xl px-6 py-4 rounded-3xl shadow-sm border border-white"><GSLogo size={36} /></div></div>
+            <div className="flex justify-center mb-12"><div className="bg-white/90 backdrop-blur-xl px-7 py-5 rounded-3xl shadow-sm border border-white"><GSLogo size={56} /></div></div>
             <div className="text-center mb-14">
               <h1 className="text-[40px] md:text-[44px] leading-[1.05] font-black tracking-tight text-[#0A1628] mb-5">건강한 당신이<br/><span className="bg-gradient-to-r from-[#F47B20] via-[#1B3A6B] to-[#5CB85C] bg-clip-text text-transparent">곧 건강한 회사입니다</span></h1>
-              <p className="text-[14px] md:text-[15px] text-[#64748B] leading-relaxed font-medium">근골격계 전문 테라피 프로그램<br/>임직원 인증 후 이용 가능합니다</p>
+              <p className="text-[14px] md:text-[15px] text-[#64748B] leading-relaxed font-medium">근골격계 전문 테라피 프로그램<br/>사전 등록된 임직원만 이용 가능합니다</p>
             </div>
             <form onSubmit={handleLogin} className="space-y-3">
               <div className="bg-white rounded-2xl p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.04)] border border-gray-100">
-                <div className="px-5 py-2 border-b border-gray-50"><label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">성함</label><input value={loginForm.name} onChange={e => setLoginForm({ ...loginForm, name: e.target.value })} placeholder="홍길동" className="w-full mt-0.5 bg-transparent text-[16px] font-semibold outline-none" /></div>
-                <div className="px-5 py-2"><label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">사번</label><input value={loginForm.empId} onChange={e => setLoginForm({ ...loginForm, empId: e.target.value })} placeholder="GP12345" className="w-full mt-0.5 bg-transparent text-[16px] font-semibold outline-none" /></div>
+                <div className="px-5 py-3 border-b border-gray-50">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">성함</label>
+                  <input value={loginForm.name} onChange={e => setLoginForm({ ...loginForm, name: e.target.value })} placeholder="홍길동" className="w-full mt-1 bg-transparent text-[18px] font-black text-black placeholder-gray-400 outline-none" />
+                </div>
+                <div className="px-5 py-3">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">사번</label>
+                  <input value={loginForm.empId} onChange={e => setLoginForm({ ...loginForm, empId: e.target.value })} placeholder="GP12345" className="w-full mt-1 bg-transparent text-[18px] font-black text-black placeholder-gray-400 outline-none" />
+                </div>
               </div>
               <button type="submit" className="w-full group relative bg-[#0A1628] text-white rounded-2xl py-5 font-bold text-[15px] overflow-hidden active:scale-[0.98] transition-transform shadow-[0_12px_32px_rgba(10,22,40,0.25)]">
-                <div className="absolute inset-0 bg-gradient-to-r from-[#F47B20] via-[#1B3A6B] to-[#5CB85C] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 <span className="relative flex items-center justify-center gap-2">프로그램 둘러보기<ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" /></span>
               </button>
             </form>
-            <div className="mt-10 text-center"><button onClick={() => setShowAdminGate(true)} className="inline-flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-[#1B3A6B] font-semibold"><Shield size={12} />관리자 접속</button></div>
+            <div className="mt-10 text-center"><button onClick={() => setShowAdminGate(true)} className="inline-flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-[#1B3A6B] font-bold"><Shield size={12} />관리자 접속</button></div>
           </div>
         </div>
         {showAdminGate && <AdminGate pw={adminPw} setPw={setAdminPw} onSubmit={handleAdminAuth} onClose={() => setShowAdminGate(false)} />}
@@ -257,7 +260,7 @@ export default function TherapyApp() {
         
         {/* Desktop Sidebar */}
         <aside className="hidden lg:flex flex-col w-[260px] bg-white border-r border-gray-100 sticky top-0 h-screen p-6">
-          <div className="mb-10"><GSLogo size={34} onClick={() => setCurrentTab('home')} /></div>
+          <div className="mb-10"><GSLogo size={42} onClick={() => setCurrentTab('home')} /></div>
           <nav className="space-y-1 flex-1">
             {[ { id: 'home', icon: Home, label: '홈' }, { id: 'programs', icon: Activity, label: '프로그램' }, { id: 'my', icon: Heart, label: '내 신청 내역', badge: myApplications.length }, ...(isAdmin ? [{ id: 'admin', icon: BarChart3, label: '관리자 대시보드' }] : []) ].map(item => (
               <button key={item.id} onClick={() => setCurrentTab(item.id)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-[13px] font-bold transition-all ${currentTab === item.id ? 'bg-[#0A1628] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -272,15 +275,14 @@ export default function TherapyApp() {
         </aside>
 
         <main className="flex-1 min-w-0 pb-24 lg:pb-8">
-          {/* Mobile Top Bar (여기에 모바일용 로그아웃 버튼을 추가했습니다!) */}
+          {/* Mobile Top Bar */}
           <div className="lg:hidden sticky top-0 z-30 bg-[#FAFAF7]/90 backdrop-blur-xl border-b border-gray-100 px-5 py-3 flex items-center justify-between">
-            <GSLogo size={28} onClick={() => setCurrentTab('home')} />
+            <GSLogo size={36} onClick={() => setCurrentTab('home')} />
             <div className="flex items-center gap-2.5">
               <button onClick={() => setShowNotifications(true)} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center relative">
                 <Bell size={14} className="text-[#0A1628]" />
                 {notifications.length > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#F47B20] rounded-full" />}
               </button>
-              {/* 모바일 퀵 로그아웃 버튼 추가 */}
               <button onClick={() => { setUser(null); setIsAdmin(false); }} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:text-red-500">
                 <LogOut size={14} />
               </button>
@@ -292,7 +294,7 @@ export default function TherapyApp() {
             {currentTab === 'home' && <HomeTab user={user} programs={programs} myApplications={myApplications} colorMap={colorMap} onOpenProgram={openProgramDetail} onGoPrograms={() => setCurrentTab('programs')} />}
             {currentTab === 'programs' && <ProgramsTab filtered={filtered} colorMap={colorMap} searchQ={searchQ} setSearchQ={setSearchQ} filterLoc={filterLoc} setFilterLoc={setFilterLoc} onOpenProgram={openProgramDetail} />}
             {currentTab === 'my' && <MyTab myApplications={myApplications} colorMap={colorMap} onCancel={cancelApplication} onGoPrograms={() => setCurrentTab('programs')} />}
-            {currentTab === 'admin' && isAdmin && <AdminPanel programs={programs} setPrograms={setPrograms} colorMap={colorMap} onRunLottery={handleRunLottery} />}
+            {currentTab === 'admin' && isAdmin && <AdminPanel programs={programs} setPrograms={setPrograms} registeredUsers={registeredUsers} setRegisteredUsers={setRegisteredUsers} colorMap={colorMap} onRunLottery={handleRunLottery} />}
           </div>
         </main>
 
@@ -379,7 +381,7 @@ const ProgramsTab = ({ filtered, colorMap, searchQ, setSearchQ, filterLoc, setFi
   <div className="space-y-6 a-fade">
     <h1 className="text-[28px] font-black">프로그램 전체</h1>
     <div className="space-y-3">
-      <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="검색" className="w-full bg-white border border-gray-100 rounded-2xl px-4 py-4 text-[14px] font-semibold outline-none" />
+      <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="검색" className="w-full bg-white border border-gray-100 rounded-2xl px-4 py-4 text-[14px] font-black placeholder-gray-400 outline-none text-black" />
       <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
         {['전체', '안양사업소', '부천사업소', '서울사업소'].map(loc => (
           <button key={loc} onClick={() => setFilterLoc(loc)} className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-[12px] font-bold ${filterLoc === loc ? 'bg-[#0A1628] text-white' : 'bg-white border border-gray-100 text-gray-500'}`}>{loc}</button>
@@ -481,20 +483,23 @@ const AdminGate = ({ pw, setPw, onSubmit, onClose }) => (
   <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0A1628]/80 backdrop-blur-md p-6 a-fade">
     <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl a-zoom">
       <div className="flex justify-between mb-6"><div className="font-black text-[16px]">관리자 인증</div><button onClick={onClose}><X size={16} /></button></div>
-      <form onSubmit={onSubmit}><input type="password" autoFocus value={pw} onChange={e => setPw(e.target.value)} className="w-full bg-gray-50 rounded-xl px-4 py-3.5 mb-3" /><button type="submit" className="w-full bg-[#0A1628] text-white rounded-xl py-3.5 font-bold">인증하기</button></form>
+      <form onSubmit={onSubmit}><input type="password" autoFocus value={pw} onChange={e => setPw(e.target.value)} placeholder="gspower1234" className="w-full bg-gray-50 rounded-xl px-4 py-3.5 mb-3 text-black font-bold outline-none placeholder-gray-400" /><button type="submit" className="w-full bg-[#0A1628] text-white rounded-xl py-3.5 font-bold">인증하기</button></form>
     </div>
   </div>
 );
 
 // ══════════════════════════════════════════════════════════
-// Admin Dashboard
+// Admin Dashboard (임직원 접근 권한 관리 기능 추가!)
 // ══════════════════════════════════════════════════════════
-const AdminPanel = ({ programs, setPrograms, colorMap, onRunLottery }) => {
+const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers, colorMap, onRunLottery }) => {
   const [form, setForm] = useState({
     titleType: '근골격계 테라피', customTitle: '', category: '물리치료', 
     location: '안양사업소', date: '', deadline: '', capacity: '',
     therapistName: '', therapistRole: '물리치료사', desc: ''
   });
+
+  // 임직원 등록용 폼 상태
+  const [newUser, setNewUser] = useState({ name: '', empId: '' });
 
   const getLocationColor = (loc) => {
     if (loc.includes('안양')) return 'orange';
@@ -519,11 +524,29 @@ const AdminPanel = ({ programs, setPrograms, colorMap, onRunLottery }) => {
     setForm({ ...form, titleType: '근골격계 테라피', customTitle: '', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
   };
 
-  const inputCls = "w-full bg-gray-50 border border-transparent rounded-xl px-3.5 py-3 text-[13px] font-semibold outline-none focus:bg-white focus:border-[#0A1628]";
+  const handleAddUser = () => {
+    if (!newUser.name || !newUser.empId) return alert('이름과 사번을 모두 입력해주세요.');
+    const exists = registeredUsers.find(u => u.empId === newUser.empId);
+    if (exists) return alert('이미 등록된 사번입니다.');
+    
+    setRegisteredUsers([{ ...newUser }, ...registeredUsers]);
+    setNewUser({ name: '', empId: '' });
+    alert('임직원이 성공적으로 등록되었습니다.');
+  };
+
+  const handleRemoveUser = (empId) => {
+    if(confirm('이 임직원의 접근 권한을 삭제하시겠습니까?')) {
+      setRegisteredUsers(registeredUsers.filter(u => u.empId !== empId));
+    }
+  };
+
+  const inputCls = "w-full bg-gray-50 border border-transparent rounded-xl px-3.5 py-3 text-[13px] font-black text-black placeholder-gray-400 outline-none focus:bg-white focus:border-[#0A1628]";
 
   return (
     <div className="space-y-6 a-fade">
       <h1 className="text-[28px] font-black">관리자 대시보드</h1>
+      
+      {/* 1. 신규 프로그램 개설 */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100">
         <h3 className="text-[15px] font-black mb-4 flex items-center gap-2"><Plus size={16} className="text-[#F47B20]"/>신규 프로그램 개설</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -538,6 +561,35 @@ const AdminPanel = ({ programs, setPrograms, colorMap, onRunLottery }) => {
         <button onClick={createProgram} className="mt-5 bg-[#0A1628] text-white px-8 py-3.5 rounded-xl font-black text-[13px]">프로그램 게시하기</button>
       </div>
 
+      {/* 2. 임직원 접근 권한 관리 (신규 기능!) */}
+      <div className="bg-white rounded-3xl p-6 border border-gray-100">
+        <h3 className="text-[15px] font-black mb-4 flex items-center gap-2"><UserPlus size={16} className="text-[#1B3A6B]"/>임직원 접근 권한 관리</h3>
+        <p className="text-[12px] text-gray-500 mb-4">여기에 등록된 임직원만 테라피 시스템에 로그인할 수 있습니다.</p>
+        
+        <div className="flex flex-col md:flex-row gap-3 mb-6">
+          <input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} placeholder="성함 (예: 홍길동)" className="flex-1 bg-gray-50 border border-transparent rounded-xl px-4 py-3 text-[13px] font-black text-black outline-none focus:border-[#0A1628]" />
+          <input value={newUser.empId} onChange={e => setNewUser({...newUser, empId: e.target.value})} placeholder="사번 (예: GP12345)" className="flex-1 bg-gray-50 border border-transparent rounded-xl px-4 py-3 text-[13px] font-black text-black outline-none focus:border-[#0A1628]" />
+          <button onClick={handleAddUser} className="bg-[#1B3A6B] text-white px-6 py-3 rounded-xl font-black text-[13px]">직원 등록</button>
+        </div>
+
+        <div className="bg-gray-50 rounded-2xl p-4 max-h-48 overflow-y-auto hide-scrollbar space-y-2 border border-gray-100">
+          {registeredUsers.length === 0 ? (
+            <p className="text-[12px] text-gray-400 text-center py-4">등록된 임직원이 없습니다.</p>
+          ) : (
+            registeredUsers.map((u, i) => (
+              <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-black text-gray-500">{u.name.charAt(0)}</div>
+                  <div><span className="font-black text-[13px] text-[#0A1628] block leading-tight">{u.name}</span><span className="text-[10px] text-gray-400 font-bold">{u.empId}</span></div>
+                </div>
+                <button onClick={() => handleRemoveUser(u.empId)} className="text-gray-400 hover:text-red-500 p-2"><X size={14}/></button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* 3. 운영 현황 및 추첨 */}
       <div>
         <h3 className="text-[16px] font-black mb-3">운영 현황 및 추첨</h3>
         <div className="space-y-2 stagger">
