@@ -14,7 +14,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ══════════════════════════════════════════════════════════
-// GS파워 로고 (로컬 이미지 + 텍스트 백업)
+// GS파워 로고
 // ══════════════════════════════════════════════════════════
 const GSLogo = ({ size = 56, onClick }) => {
   const [imgError, setImgError] = useState(false);
@@ -40,34 +40,27 @@ const GlobalStyles = () => (
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
     html, body, #root { font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
     * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideFromBottom { from { transform: translateY(100%); } to { transform: translateY(0); } }
     @keyframes zoomIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
     @keyframes pulseSoft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-
     .a-fade { animation: fadeIn .3s ease-out both; }
     .a-slide-up { animation: slideUp .45s cubic-bezier(0.16,1,0.3,1) both; }
     .a-sheet { animation: slideFromBottom .4s cubic-bezier(0.16,1,0.3,1) both; }
     .a-zoom { animation: zoomIn .4s cubic-bezier(0.16,1,0.3,1) both; }
     .a-pulse { animation: pulseSoft 2s ease-in-out infinite; }
-
     .stagger > * { opacity: 0; animation: slideUp .5s cubic-bezier(0.16,1,0.3,1) forwards; }
     .stagger > *:nth-child(1) { animation-delay: .05s; }
     .stagger > *:nth-child(2) { animation-delay: .1s; }
     .stagger > *:nth-child(3) { animation-delay: .15s; }
     .stagger > *:nth-child(4) { animation-delay: .2s; }
-    
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .line-clamp-2-fallback { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   `}</style>
 );
 
-// ══════════════════════════════════════════════════════════
-// Helpers
-// ══════════════════════════════════════════════════════════
 const formatDate = (iso) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -100,11 +93,7 @@ const StatusBadge = ({ status }) => {
     '추첨완료': 'bg-purple-100 text-purple-700 border border-purple-200',
     '종료': 'bg-gray-100 text-gray-500 border border-gray-200'
   };
-  return (
-    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black ${colors[status]}`}>
-      {status}
-    </span>
-  );
+  return <span className={`px-2.5 py-1 rounded-md text-[10px] font-black ${colors[status]}`}>{status}</span>;
 };
 
 // ══════════════════════════════════════════════════════════
@@ -126,15 +115,11 @@ export default function TherapyApp() {
   const [filterLoc, setFilterLoc] = useState('전체');
   const [searchQ, setSearchQ] = useState('');
 
-  const [registeredUsers, setRegisteredUsers] = useState([
-    { name: '이주필', empId: 'C800440' } // Fallback 데이터
-  ]);
-
+  const [registeredUsers, setRegisteredUsers] = useState([{ name: '이주필', empId: 'C800440' }]);
   const [programs, setPrograms] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
   const notifications = [{ id: 1, text: '환영합니다! 건강한 하루 되세요.', time: '방금 전', type: 'success' }];
 
-  // 🔥 [백엔드 연동] Supabase 데이터 실시간 호출
   useEffect(() => {
     const fetchRealData = async () => {
       if (supabaseUrl !== 'https://placeholder.supabase.co') {
@@ -144,15 +129,13 @@ export default function TherapyApp() {
             id: p.id, title: p.title, category: p.category || '물리치료', location: p.location,
             date: p.date, deadline: p.deadline, time: p.time, capacity: p.capacity, applied: p.applied,
             rating: p.rating || 5.0, manualStatus: p.manual_status,
-            therapist: { name: p.therapist_name, role: p.therapist_role || '물리치료사', exp: '5년', avatar: (p.therapist_name || 'G').charAt(0) },
+            therapist: { name: p.therapist_name, role: p.therapist_role || '물리치료사', avatar: (p.therapist_name || 'G').charAt(0) },
             desc: p.description, tags: ['신규', p.category || '물리치료'], color: p.color || 'orange', duration: p.duration || '50분/인'
           }));
           setPrograms(mappedPrograms);
         }
         const { data: users } = await supabase.from('registered_users').select('*');
-        if (users && users.length > 0) {
-          setRegisteredUsers(users.map(u => ({ name: u.name, empId: u.emp_id })));
-        }
+        if (users && users.length > 0) setRegisteredUsers(users.map(u => ({ name: u.name, empId: u.emp_id })));
       }
     };
     fetchRealData();
@@ -177,9 +160,7 @@ export default function TherapyApp() {
   const applyProgram = async () => {
     setShowConfirm(false); setShowDetail(false);
     const updatedApplied = selectedProgram.applied + 1;
-    if (supabaseUrl !== 'https://placeholder.supabase.co') {
-      await supabase.from('programs').update({ applied: updatedApplied }).eq('id', selectedProgram.id);
-    }
+    if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').update({ applied: updatedApplied }).eq('id', selectedProgram.id);
     setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: updatedApplied } : p));
     setMyApplications(prev => [...prev, { ...selectedProgram, applied: updatedApplied, appliedAt: new Date().toISOString(), status: 'pending' }]);
     setShowSuccess(true); setTimeout(() => setShowSuccess(false), 2800);
@@ -198,9 +179,7 @@ export default function TherapyApp() {
     if (newCount >= p.capacity) msg += `<p class="text-[#5CB85C] font-black text-[15px] pt-2">✅ 1순위 대상자 중 무작위 ${p.capacity}명 선정 완료</p></div>`;
     else msg += `<p class="text-[#5CB85C] font-black text-[15px] pt-2">✅ 1순위 전원 선발 후, 부족한 ${p.capacity - newCount}명을 대기자에서 추가 선정 완료</p></div>`;
 
-    if (supabaseUrl !== 'https://placeholder.supabase.co') {
-      await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', id);
-    }
+    if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', id);
     setLotteryResult(msg);
     setPrograms(prev => prev.map(item => item.id === id ? { ...item, manualStatus: "추첨완료" } : item));
   };
@@ -218,23 +197,25 @@ export default function TherapyApp() {
   };
 
   // ═══════════════════════════════════════════════════
-  // 로그인 화면
+  // 로그인 화면 (부천안전/보건팀 크레딧 추가 완료!)
   // ═══════════════════════════════════════════════════
   if (!user) {
     return (
       <>
         <GlobalStyles />
-        <div className="min-h-screen w-full bg-[#FAFAF7] relative overflow-hidden flex items-center justify-center p-6">
+        <div className="min-h-screen w-full bg-[#FAFAF7] relative overflow-hidden flex flex-col items-center justify-center p-6">
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-gradient-to-br from-[#F5A524]/20 to-transparent blur-3xl a-float" />
             <div className="absolute top-1/2 -right-40 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-[#5B8FD9]/20 to-transparent blur-3xl" />
           </div>
+          
           <div className="w-full max-w-[440px] a-slide-up relative z-10">
             <div className="flex justify-center mb-12"><div className="bg-white/90 backdrop-blur-xl px-7 py-5 rounded-3xl shadow-sm border border-white"><GSLogo size={56} /></div></div>
             <div className="text-center mb-14">
               <h1 className="text-[40px] font-black tracking-tight text-[#0A1628] mb-5 leading-tight">건강한 당신이<br/><span className="bg-gradient-to-r from-[#F47B20] via-[#1B3A6B] to-[#5CB85C] bg-clip-text text-transparent">곧 건강한 회사입니다</span></h1>
               <p className="text-[14px] text-[#64748B] font-medium leading-relaxed">근골격계 전문 테라피 프로그램<br/>사전 등록된 임직원만 이용 가능합니다</p>
             </div>
+            
             <form onSubmit={handleLogin} className="space-y-3">
               <div className="bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
                 <div className="px-5 py-3 border-b border-gray-50">
@@ -248,7 +229,20 @@ export default function TherapyApp() {
               </div>
               <button type="submit" className="w-full bg-[#0A1628] text-white rounded-2xl py-5 font-bold text-[15px] shadow-lg active:scale-[0.98] transition-transform">프로그램 둘러보기</button>
             </form>
-            <div className="mt-10 text-center"><button onClick={() => setShowAdminGate(true)} className="inline-flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-[#1B3A6B] font-bold"><Shield size={12} />관리자 접속</button></div>
+            
+            <div className="mt-10 text-center">
+              <button onClick={() => setShowAdminGate(true)} className="inline-flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-[#1B3A6B] font-bold"><Shield size={12} />관리자 접속</button>
+            </div>
+
+            {/* 🔥 부천안전/보건팀 크레딧 추가 */}
+            <div className="mt-16 text-center">
+              <div className="inline-flex items-center justify-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
+                <Sparkles size={10} className="text-[#F47B20]" />
+                <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
+                  Powered by 부천안전/보건팀
+                </span>
+              </div>
+            </div>
           </div>
         </div>
         {showAdminGate && <AdminGate pw={adminPw} setPw={setAdminPw} onSubmit={handleAdminAuth} onClose={() => setShowAdminGate(false)} />}
@@ -373,28 +367,18 @@ export default function TherapyApp() {
   );
 }
 
-// ══════════════════════════════════════════════════════════
-// Tabs (여기서 날아갔던 하이엔드 UI를 100% 복구했습니다!!!)
-// ══════════════════════════════════════════════════════════
-
 const HomeTab = ({ user, programs, myApplications, colorMap, onOpenProgram, onGoPrograms }) => (
   <div className="space-y-6 a-fade">
     <div className="relative overflow-hidden rounded-3xl bg-[#0A1628] p-7 lg:p-10 text-white">
       <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-gradient-to-br from-[#F47B20]/30 to-transparent blur-3xl" />
       <div className="absolute -bottom-20 -left-20 w-80 h-80 rounded-full bg-gradient-to-br from-[#5CB85C]/25 to-transparent blur-3xl" />
       <div className="relative">
-        <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full text-[11px] font-bold mb-5 border border-white/10">
-          <span className="w-1.5 h-1.5 bg-[#5CB85C] rounded-full a-pulse" />지금 신청 가능한 프로그램 {programs.filter(p => p.applied < p.capacity).length}개
-        </div>
+        <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full text-[11px] font-bold mb-5 border border-white/10"><span className="w-1.5 h-1.5 bg-[#5CB85C] rounded-full a-pulse" />지금 신청 가능한 프로그램 {programs.filter(p => p.applied < p.capacity).length}개</div>
         <h1 className="text-[28px] lg:text-[42px] font-black leading-[1.1] tracking-tight mb-3">{user.name}님,<br/>오늘도 건강하세요</h1>
-        <p className="text-[14px] lg:text-[15px] text-white/60 font-medium max-w-md leading-relaxed">엄선된 전문가와 함께하는<br className="lg:hidden" /> 프리미엄 웰니스 케어를 경험해보세요</p>
-        <button onClick={onGoPrograms} className="mt-6 lg:mt-8 group inline-flex items-center gap-2 bg-white text-[#0A1628] px-5 py-3 rounded-xl font-bold text-[13px] shadow-lg hover:shadow-xl transition-shadow">
-          전체 프로그램 보기<ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-        </button>
+        <button onClick={onGoPrograms} className="mt-6 lg:mt-8 group inline-flex items-center gap-2 bg-white text-[#0A1628] px-5 py-3 rounded-xl font-bold text-[13px] shadow-lg hover:shadow-xl transition-shadow">전체 프로그램 보기<ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" /></button>
       </div>
     </div>
     
-    {/* 사라졌던 통계 위젯 4개 부활! */}
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 stagger">
       <StatCard icon={Activity} label="참여 프로그램" value={myApplications.length} suffix="건" accent="#F47B20" />
       <StatCard icon={Users} label="이번 달 참여 인원" value={programs.reduce((a,p)=>a+p.applied,0)} suffix="명" accent="#1B3A6B" />
@@ -404,13 +388,9 @@ const HomeTab = ({ user, programs, myApplications, colorMap, onOpenProgram, onGo
     
     <div>
       <div className="flex items-end justify-between mb-4 lg:mb-5">
-        <div>
-          <div className="text-[11px] font-bold text-[#F47B20] uppercase tracking-widest mb-1">Recommended</div>
-          <h2 className="text-[20px] lg:text-[26px] font-black tracking-tight text-[#0A1628]">추천 프로그램</h2>
-        </div>
+        <div><div className="text-[11px] font-bold text-[#F47B20] uppercase tracking-widest mb-1">Recommended</div><h2 className="text-[20px] lg:text-[26px] font-black tracking-tight text-[#0A1628]">추천 프로그램</h2></div>
         <button onClick={onGoPrograms} className="text-[12px] font-bold text-gray-400 hover:text-[#0A1628] flex items-center gap-1">전체보기 <ChevronRight size={12} /></button>
       </div>
-      {/* 사라졌던 웅장한 대형 추천 카드(FeaturedCard) 부활! */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger">
         {programs.slice(0, 2).map(p => <FeaturedCard key={p.id} program={p} onClick={() => onOpenProgram(p)} colorMap={colorMap} />)}
       </div>
@@ -420,10 +400,7 @@ const HomeTab = ({ user, programs, myApplications, colorMap, onOpenProgram, onGo
 
 const ProgramsTab = ({ filtered, colorMap, searchQ, setSearchQ, filterLoc, setFilterLoc, onOpenProgram }) => (
   <div className="space-y-6 a-fade">
-    <div>
-      <div className="text-[11px] font-bold text-[#F47B20] uppercase tracking-widest mb-1">Programs</div>
-      <h1 className="text-[28px] lg:text-[36px] font-black tracking-tight text-[#0A1628]">프로그램 전체</h1>
-    </div>
+    <div><div className="text-[11px] font-bold text-[#F47B20] uppercase tracking-widest mb-1">Programs</div><h1 className="text-[28px] lg:text-[36px] font-black tracking-tight text-[#0A1628]">프로그램 전체</h1></div>
     <div className="space-y-3">
       <div className="relative">
         <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -443,10 +420,7 @@ const ProgramsTab = ({ filtered, colorMap, searchQ, setSearchQ, filterLoc, setFi
 
 const MyTab = ({ myApplications, colorMap, onCancel, onGoPrograms }) => (
   <div className="space-y-6 a-fade">
-    <div>
-      <div className="text-[11px] font-bold text-[#5CB85C] uppercase tracking-widest mb-1">My Applications</div>
-      <h1 className="text-[28px] lg:text-[36px] font-black tracking-tight text-[#0A1628]">내 신청 내역</h1>
-    </div>
+    <div><div className="text-[11px] font-bold text-[#5CB85C] uppercase tracking-widest mb-1">My Applications</div><h1 className="text-[28px] lg:text-[36px] font-black tracking-tight text-[#0A1628]">내 신청 내역</h1></div>
     {myApplications.length === 0 ? (
       <div className="bg-white rounded-3xl p-14 text-center border border-gray-100">
         <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#FAFAF7] to-[#F5F5F2] flex items-center justify-center"><Heart size={24} className="text-gray-300" /></div>
@@ -478,10 +452,6 @@ const MyTab = ({ myApplications, colorMap, onCancel, onGoPrograms }) => (
   </div>
 );
 
-// ══════════════════════════════════════════════════════════
-// Cards & Modals (디자인 무손실 100% 복구!)
-// ══════════════════════════════════════════════════════════
-
 const StatCard = ({ icon: Icon, label, value, suffix, accent }) => (
   <div className="bg-white rounded-2xl p-4 lg:p-5 border border-gray-100 hover:shadow-md hover:-translate-y-0.5 transition-all">
     <div className="mb-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}15` }}><Icon size={15} style={{ color: accent }} /></div></div>
@@ -490,7 +460,6 @@ const StatCard = ({ icon: Icon, label, value, suffix, accent }) => (
   </div>
 );
 
-// 🔥 [부활] 그라데이션과 테라피스트 프로필이 들어간 대형 추천 카드!
 const FeaturedCard = ({ program, onClick, colorMap }) => {
   const c = colorMap[program.color] || colorMap['orange'];
   const status = getProgramStatus(program);
@@ -513,7 +482,7 @@ const FeaturedCard = ({ program, onClick, colorMap }) => {
         </div>
         <div className="flex items-center gap-3 mb-5 pb-5 border-b border-gray-200/50">
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-[11px]" style={{ backgroundColor: c.solid }}>{program.therapist?.avatar || 'G'}</div>
-          <div><div className="text-[12px] font-black text-[#0A1628]">{program.therapist?.name || '담당자'} {program.therapist?.role}</div><div className="text-[10px] text-gray-400 font-bold">경력 {program.therapist?.exp || '전문'}</div></div>
+          <div><div className="text-[12px] font-black text-[#0A1628]">{program.therapist?.name || '담당자'}</div><div className="text-[10px] text-gray-400 font-bold">{program.therapist?.role}</div></div>
         </div>
         <div className="mb-5">
           <div className="flex justify-between mb-2"><span className="text-[10px] font-black uppercase text-gray-400">모집 현황</span><div className="flex gap-1"><span className={`text-[16px] font-black ${isFull ? 'text-gray-500' : 'text-[#0A1628]'}`}>{program.applied}</span><span className="text-[11px] text-gray-300 font-bold">/ {program.capacity}명</span></div></div>
@@ -550,7 +519,6 @@ const CompactCard = ({ program, onClick, colorMap }) => {
   );
 };
 
-// 🔥 [부활] 태그와 상세 테라피스트 정보가 포함된 멋진 팝업!
 const ProgramDetailSheet = ({ program, onClose, onApply, colorMap }) => {
   const c = colorMap[program.color] || colorMap['orange'];
   const status = getProgramStatus(program);
@@ -584,8 +552,7 @@ const ProgramDetailSheet = ({ program, onClose, onApply, colorMap }) => {
             <div className="text-[10px] font-black uppercase text-gray-400 mb-3">Therapist</div>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-[14px]" style={{ backgroundColor: c.solid }}>{program.therapist?.avatar || 'G'}</div>
-              <div className="flex-1"><div className="text-[14px] font-black text-[#0A1628]">{program.therapist?.name || '담당자'}</div><div className="text-[11px] text-gray-500 font-bold">{program.therapist?.role} · 경력 {program.therapist?.exp}</div></div>
-              <div className="flex items-center gap-0.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-100"><Star size={11} className="fill-[#F47B20] text-[#F47B20]" /><span className="text-[11px] font-black text-[#0A1628]">{program.rating}</span></div>
+              <div className="flex-1"><div className="text-[14px] font-black text-[#0A1628]">{program.therapist?.name || '담당자'}</div><div className="text-[11px] text-gray-500 font-bold">{program.therapist?.role}</div></div>
             </div>
           </div>
           <div>
@@ -619,7 +586,7 @@ const AdminGate = ({ pw, setPw, onSubmit, onClose }) => (
 );
 
 // ══════════════════════════════════════════════════════════
-// Admin Dashboard (디자인 원상복구!)
+// Admin Dashboard
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers, colorMap, onRunLottery }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '안양사업소', date: '', deadline: '', capacity: '', therapistName: '', therapistRole: '물리치료사', desc: '' });
@@ -652,7 +619,7 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
       await supabase.from('programs').insert([newP_DB]);
     }
     
-    setPrograms([{ id: Date.now(), ...newP_DB, therapist: { name: form.therapistName, role: form.therapistRole, exp: '5년', avatar: form.therapistName.charAt(0) } }, ...programs]);
+    setPrograms([{ id: Date.now(), ...newP_DB, therapist: { name: form.therapistName, role: form.therapistRole, avatar: form.therapistName.charAt(0) } }, ...programs]);
     alert('게시 성공!');
     setForm({ ...form, titleType: '근골격계 테라피', customTitle: '', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
   };
