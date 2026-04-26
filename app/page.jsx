@@ -40,35 +40,32 @@ const GlobalStyles = () => (
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
     html, body, #root { font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
     * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideFromBottom { from { transform: translateY(100%); } to { transform: translateY(0); } }
     @keyframes zoomIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
     @keyframes pulseSoft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-
     .a-fade { animation: fadeIn .3s ease-out both; }
     .a-slide-up { animation: slideUp .45s cubic-bezier(0.16,1,0.3,1) both; }
     .a-sheet { animation: slideFromBottom .4s cubic-bezier(0.16,1,0.3,1) both; }
     .a-zoom { animation: zoomIn .4s cubic-bezier(0.16,1,0.3,1) both; }
     .a-pulse { animation: pulseSoft 2s ease-in-out infinite; }
-
     .stagger > * { opacity: 0; animation: slideUp .5s cubic-bezier(0.16,1,0.3,1) forwards; }
     .stagger > *:nth-child(1) { animation-delay: .05s; }
     .stagger > *:nth-child(2) { animation-delay: .1s; }
     .stagger > *:nth-child(3) { animation-delay: .15s; }
     .stagger > *:nth-child(4) { animation-delay: .2s; }
-    
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .line-clamp-2-fallback { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   `}</style>
 );
 
+// 🔥 [철통방어] 날짜나 상태 계산할 때 뻗지 않도록 방어 로직 풀가동
 const formatDate = (iso) => {
-  if (!iso) return '';
+  if (!iso) return '미정';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
+  if (isNaN(d.getTime())) return String(iso);
   const days = ['일', '월', '화', '수', '목', '금', '토'];
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
 };
@@ -76,10 +73,13 @@ const formatDate = (iso) => {
 const getProgramStatus = (p) => {
   if (!p) return '종료';
   if (p.manualStatus) return p.manualStatus; 
-  const today = new Date().toISOString().split('T')[0];
-  if (p.date < today) return '종료';
-  if (p.deadline < today) return '모집마감';
-  return '모집중';
+  if (!p.date || !p.deadline) return '모집중'; // 기한이 없으면 무조건 모집중으로 방어
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    if (p.date < today) return '종료';
+    if (p.deadline < today) return '모집마감';
+    return '모집중';
+  } catch(e) { return '모집중'; }
 };
 
 const StatusBadge = ({ status }) => {
@@ -89,7 +89,7 @@ const StatusBadge = ({ status }) => {
     '추첨완료': 'bg-purple-100 text-purple-700 border border-purple-200',
     '종료': 'bg-gray-100 text-gray-500 border border-gray-200'
   };
-  return <span className={`px-2.5 py-1 rounded-md text-[10px] font-black ${colors[status] || colors['종료']}`}>{status}</span>;
+  return <span className={`px-2.5 py-1 rounded-md text-[10px] font-black ${colors[status] || colors['종료']}`}>{status || '종료'}</span>;
 };
 
 // ══════════════════════════════════════════════════════════
@@ -120,37 +120,39 @@ export default function TherapyApp() {
     const fetchRealData = async () => {
       try {
         if (supabaseUrl !== 'https://placeholder.supabase.co') {
+          // 프로그램 데이터 호출 및 철통 방어 매핑
           const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
-          if (pData) {
-            setPrograms(pData.map(p => ({
+          if (pData && Array.isArray(pData)) {
+            const mappedPrograms = pData.map(p => ({
               id: p.id, 
               title: p.title || '이름 없는 프로그램', 
               category: p.category || '물리치료', 
-              location: p.location || '사업소 미지정',
+              location: p.location || '부천사업소',
               date: p.date || '', 
               deadline: p.deadline || '', 
-              time: p.time || '14:00~17:00', 
-              capacity: p.capacity || 10, 
-              applied: p.applied || 0,
-              rating: p.rating || 5.0, 
+              capacity: parseInt(p.capacity) || 10, 
+              applied: parseInt(p.applied) || 0,
+              rating: parseFloat(p.rating) || 5.0, 
               manualStatus: p.manual_status,
-              // 🔥 [안전장치 1] DB에 이름이 아예 없어도 앱이 터지지 않도록 방어!
               therapist: { 
                 name: p.therapist_name || '담당자', 
-                role: p.therapist_role || '물리치료사', 
-                avatar: (p.therapist_name || 'G').charAt(0) 
+                role: p.therapist_role || '테라피스트', 
+                // 🔥 [핵심 방어] charAt(0) 에러 완벽 차단!
+                avatar: String(p.therapist_name || 'G').charAt(0) 
               },
               desc: p.description || '', 
-              tags: ['신규', p.category || '물리치료'], 
-              color: p.color || 'orange', 
-              duration: p.duration || '50분/인'
-            })));
+              color: p.color || 'orange'
+            }));
+            setPrograms(mappedPrograms);
           }
+          // 임직원 데이터 호출
           const { data: users } = await supabase.from('registered_users').select('*');
-          if (users) setRegisteredUsers(users.map(u => ({ name: u.name, empId: u.emp_id })));
+          if (users && Array.isArray(users)) {
+            setRegisteredUsers(users.map(u => ({ name: u.name || '', empId: String(u.emp_id || '').toUpperCase() })));
+          }
         }
       } catch (err) {
-        console.error("데이터를 불러오는데 실패했습니다.", err);
+        console.error('데이터 로드 실패 (무시됨):', err);
       }
     };
     fetchRealData();
@@ -159,7 +161,7 @@ export default function TherapyApp() {
   const handleLogin = (e) => { 
     e?.preventDefault(); 
     if (!loginForm.name || !loginForm.empId) return alert('성함과 사번을 입력해주세요.');
-    const u = registeredUsers.find(u => u.name === loginForm.name && u.empId === (loginForm.empId || '').toUpperCase());
+    const u = registeredUsers.find(u => u.name === loginForm.name && u.empId === String(loginForm.empId).toUpperCase());
     if (u) setUser({ ...u });
     else alert('등록되지 않은 정보입니다. 사번과 성함을 확인해주세요.');
   };
@@ -195,10 +197,11 @@ export default function TherapyApp() {
     setPrograms(prev => prev.map(item => item.id === id ? { ...item, manualStatus: "추첨완료" } : item));
   };
 
+  // 🔥 [핵심 방어] 검색 필터에서 .includes()가 죽지 않도록 String() 처리
   const filtered = programs.filter(p => {
     if (!p) return false;
-    const locMatch = filterLoc === '전체' || (p.location && p.location.includes(filterLoc));
-    const queryMatch = !searchQ || (p.title && p.title.includes(searchQ));
+    const locMatch = filterLoc === '전체' || String(p.location || '').includes(filterLoc);
+    const queryMatch = !searchQ || String(p.title || '').includes(searchQ);
     return locMatch && queryMatch;
   });
 
@@ -244,6 +247,9 @@ export default function TherapyApp() {
     );
   }
 
+  // ═══════════════════════════════════════════════════
+  // 메인 렌더링
+  // ═══════════════════════════════════════════════════
   return (
     <>
       <GlobalStyles />
@@ -267,7 +273,8 @@ export default function TherapyApp() {
             <div className="flex items-center gap-2.5">
               <button onClick={() => setShowNotifications(true)} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center relative"><Bell size={14} className="text-[#0A1628]" />{notifications.length > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#F47B20] rounded-full" />}</button>
               <button onClick={() => { setUser(null); setIsAdmin(false); }} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:text-red-500"><LogOut size={14} /></button>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F47B20] to-[#1B3A6B] flex items-center justify-center text-white font-black text-[13px]">{user.name.charAt(0)}</div>
+              {/* 🔥 [방어] user.name이 없어도 안 튕김 */}
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F47B20] to-[#1B3A6B] flex items-center justify-center text-white font-black text-[13px]">{String(user?.name || 'G').charAt(0)}</div>
             </div>
           </div>
           <div className="px-5 lg:px-10 py-6 lg:py-8 max-w-[1400px] mx-auto">
@@ -285,7 +292,7 @@ export default function TherapyApp() {
           <div className="bg-white rounded-t-3xl lg:rounded-3xl p-7 w-full lg:max-w-md a-sheet">
             <h3 className="text-[20px] font-black text-center mb-6">신청 정보 확인</h3>
             <div className="bg-gray-50 rounded-2xl p-5 space-y-3 mb-6 border border-gray-100">
-              <Row label="신청자" value={user.name} /><Row label="프로그램" value={selectedProgram.title} /><Row label="일시" value={formatDate(selectedProgram.date)} />
+              <Row label="신청자" value={user?.name || '신청자'} /><Row label="프로그램" value={selectedProgram?.title || ''} /><Row label="일시" value={formatDate(selectedProgram?.date)} />
             </div>
             <div className="flex gap-2"><button onClick={() => setShowConfirm(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-[#0A1628]">취소</button><button onClick={applyProgram} className="flex-[2] bg-[#0A1628] text-white py-4 rounded-2xl font-bold">최종 신청</button></div>
           </div>
@@ -341,13 +348,14 @@ const HomeTab = ({ user, programs, myApplications, colorMap, onOpenProgram, onGo
       </div>
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger">
-      <StatCard icon={Activity} label="참여 프로그램" value={myApplications.length} suffix="건" accent="#F47B20" />
+      <StatCard icon={Activity} label="참여 프로그램" value={myApplications?.length || 0} suffix="건" accent="#F47B20" />
       <StatCard icon={Users} label="평균 만족도" value="4.9" suffix="/5.0" accent="#5CB85C" />
-      <StatCard icon={Award} label="신규 오픈" value={programs.length} suffix="개" accent="#1B3A6B" />
-      <StatCard icon={TrendingUp} label="참여 인원" value={programs.reduce((a,p)=>a+(p.applied||0),0)} suffix="명" accent="#F47B20" />
+      <StatCard icon={Award} label="신규 오픈" value={programs?.length || 0} suffix="개" accent="#1B3A6B" />
+      {/* 🔥 [방어] Array.reduce 안전하게 처리 */}
+      <StatCard icon={TrendingUp} label="참여 인원" value={Array.isArray(programs) ? programs.reduce((a,p)=>a+(p?.applied||0),0) : 0} suffix="명" accent="#F47B20" />
     </div>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      {programs.slice(0, 2).map(p => <FeaturedCard key={p.id} program={p} onClick={() => onOpenProgram(p)} colorMap={colorMap} />)}
+      {Array.isArray(programs) && programs.slice(0, 2).map(p => <FeaturedCard key={p.id} program={p} onClick={() => onOpenProgram(p)} colorMap={colorMap} />)}
     </div>
   </div>
 );
@@ -357,7 +365,7 @@ const ProgramsTab = ({ filtered, colorMap, searchQ, setSearchQ, filterLoc, setFi
     <div className="flex flex-col gap-4">
       <div className="relative">
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="테라피 이름이나 증상을 검색하세요" className="w-full bg-white border border-gray-100 rounded-3xl pl-12 pr-6 py-5 text-[15px] font-black text-black outline-none focus:border-[#0A1628]" />
+        <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="테라피 이름 검색" className="w-full bg-white border border-gray-100 rounded-3xl pl-12 pr-6 py-5 text-[15px] font-black text-black outline-none focus:border-[#0A1628]" />
       </div>
       <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
         {['전체', '안양사업소', '부천사업소', '서울사업소'].map(loc => (
@@ -366,7 +374,7 @@ const ProgramsTab = ({ filtered, colorMap, searchQ, setSearchQ, filterLoc, setFi
       </div>
     </div>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger">
-      {filtered.map(p => <CompactCard key={p.id} program={p} onClick={() => onOpenProgram(p)} colorMap={colorMap} />)}
+      {Array.isArray(filtered) && filtered.map(p => <CompactCard key={p.id} program={p} onClick={() => onOpenProgram(p)} colorMap={colorMap} />)}
     </div>
   </div>
 );
@@ -374,31 +382,29 @@ const ProgramsTab = ({ filtered, colorMap, searchQ, setSearchQ, filterLoc, setFi
 const MyTab = ({ myApplications, colorMap, onCancel, onRate, onGoPrograms }) => (
   <div className="space-y-6 a-fade">
     <h1 className="text-[28px] font-black text-[#0A1628]">내 신청 내역</h1>
-    {myApplications.length === 0 ? (
+    {!myApplications || myApplications.length === 0 ? (
       <div className="bg-white rounded-3xl p-16 text-center border border-gray-100"><Heart size={32} className="mx-auto mb-4 text-gray-200" /><h3 className="font-black text-gray-400">아직 신청한 프로그램이 없어요</h3><button onClick={onGoPrograms} className="mt-6 bg-[#0A1628] text-white px-6 py-3 rounded-xl font-bold">프로그램 보러가기</button></div>
     ) : (
       <div className="space-y-4">
         {myApplications.map((p, i) => {
-          // 🔥 [안전장치 2] 에러 방어
-          const c = colorMap[p.color] || colorMap['orange'];
+          const c = colorMap[p?.color] || colorMap['orange'];
           return (
             <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
               <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center`}><Stethoscope size={20} style={{color: c.solid}}/></div><div><h3 className="font-black text-[16px] text-[#0A1628]">{p.title}</h3><p className="text-[11px] text-gray-400 font-bold">{p.location} · {formatDate(p.date)}</p></div></div>
+                <div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center`}><Stethoscope size={20} style={{color: c.solid}}/></div><div><h3 className="font-black text-[16px] text-[#0A1628]">{p?.title}</h3><p className="text-[11px] text-gray-400 font-bold">{p?.location} · {formatDate(p?.date)}</p></div></div>
                 <span className="bg-green-50 text-green-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase">신청완료</span>
               </div>
               
               <div className="bg-gray-50 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-2"><ThumbsUp size={14} className="text-[#F47B20]"/><span className="text-[12px] font-black text-gray-600">참여하신 테라피는 어떠셨나요? 평점을 남겨주세요!</span></div>
+                <div className="flex items-center gap-2"><ThumbsUp size={14} className="text-[#F47B20]"/><span className="text-[12px] font-black text-gray-600">테라피는 어떠셨나요? 평점을 남겨주세요!</span></div>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map(star => (
                     <button key={star} onClick={() => onRate(p.id, star)} className="hover:scale-110 transition-transform">
-                      <Star size={24} className={`${star <= (p.rating || 0) ? 'fill-[#F47B20] text-[#F47B20]' : 'text-gray-300'}`} />
+                      <Star size={24} className={`${star <= (p?.rating || 0) ? 'fill-[#F47B20] text-[#F47B20]' : 'text-gray-300'}`} />
                     </button>
                   ))}
                 </div>
               </div>
-
               <div className="mt-4 flex justify-end"><button onClick={() => onCancel(p.id)} className="text-[11px] font-bold text-gray-300 hover:text-red-500 transition-colors">신청 취소하기</button></div>
             </div>
           );
@@ -417,19 +423,22 @@ const StatCard = ({ icon: Icon, label, value, suffix, accent }) => (
 );
 
 const FeaturedCard = ({ program, onClick, colorMap }) => {
-  // 🔥 [안전장치 3] DB에 이상한 컬러값이 들어있어도 기본 오렌지색으로 방어!
-  const c = colorMap[program.color] || colorMap['orange'];
-  const cap = program.capacity || 1; // 0으로 나누기 방지
-  const pct = Math.min(100, ((program.applied || 0) / cap) * 100);
+  // 🔥 [핵심 방어] program 객체가 없거나 color가 이상해도 무조건 통과!
+  const c = colorMap[program?.color] || colorMap['orange'];
+  const cap = program?.capacity || 1; 
+  const pct = Math.min(100, ((program?.applied || 0) / cap) * 100);
   
   return (
     <button onClick={onClick} className="group relative text-left bg-white rounded-3xl overflow-hidden border border-gray-100 hover:shadow-xl transition-all p-7">
       <div className={`absolute inset-0 bg-gradient-to-br ${c.soft} opacity-30`} />
       <div className="relative">
-        <div className="flex justify-between mb-6"><span className={`text-[10px] font-black uppercase ${c.text}`}>{program.category}</span><StatusBadge status={getProgramStatus(program)}/></div>
-        <h3 className="text-[22px] font-black text-[#0A1628] mb-4 leading-tight">{program.title}</h3>
-        <div className="space-y-1 text-[12px] text-gray-500 font-bold mb-6"><div className="flex gap-2"><MapPin size={12}/>{program.location}</div><div className="flex gap-2"><Calendar size={12}/>{formatDate(program.date)}</div></div>
-        <div className="flex items-center gap-3 mb-6"><div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center font-black text-[11px] text-white" style={{backgroundColor: c.solid}}>{program.therapist?.avatar || 'G'}</div><div><div className="text-[13px] font-black text-[#0A1628]">{program.therapist?.name || '담당자'}</div><div className="text-[11px] text-gray-400">{program.therapist?.role || '테라피스트'}</div></div></div>
+        <div className="flex justify-between mb-6"><span className={`text-[10px] font-black uppercase ${c.text}`}>{program?.category || '테라피'}</span><StatusBadge status={getProgramStatus(program)}/></div>
+        <h3 className="text-[22px] font-black text-[#0A1628] mb-4 leading-tight">{program?.title || '로딩중...'}</h3>
+        <div className="space-y-1 text-[12px] text-gray-500 font-bold mb-6"><div className="flex gap-2"><MapPin size={12}/>{program?.location || '장소'}</div><div className="flex gap-2"><Calendar size={12}/>{formatDate(program?.date)}</div></div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center font-black text-[11px] text-white" style={{backgroundColor: c.solid}}>{program?.therapist?.avatar || 'G'}</div>
+          <div><div className="text-[13px] font-black text-[#0A1628]">{program?.therapist?.name || '담당자'}</div><div className="text-[11px] text-gray-400">{program?.therapist?.role || '테라피스트'}</div></div>
+        </div>
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full transition-all" style={{width: `${pct}%`, backgroundColor: c.solid}} /></div>
       </div>
     </button>
@@ -437,33 +446,32 @@ const FeaturedCard = ({ program, onClick, colorMap }) => {
 };
 
 const CompactCard = ({ program, onClick, colorMap }) => {
-  // 🔥 [안전장치 4] DB 방어 로직 추가
-  const c = colorMap[program.color] || colorMap['orange'];
-  const cap = program.capacity || 1;
-  const pct = Math.min(100, ((program.applied || 0) / cap) * 100);
+  const c = colorMap[program?.color] || colorMap['orange'];
+  const cap = program?.capacity || 1;
+  const pct = Math.min(100, ((program?.applied || 0) / cap) * 100);
   
   return (
     <button onClick={onClick} className="w-full text-left bg-white rounded-2xl p-5 border border-gray-100 hover:shadow-lg transition-all">
-      <div className="flex justify-between mb-4"><span className={`text-[10px] font-black px-2 py-1 rounded-lg ${c.bg} ${c.text}`}>{program.category}</span><StatusBadge status={getProgramStatus(program)}/></div>
-      <h3 className="font-black text-[#0A1628] mb-4 leading-tight">{program.title}</h3>
-      <div className="space-y-1 text-[11px] text-gray-400 font-bold mb-4"><div>{program.location}</div><div>{formatDate(program.date)}</div></div>
+      <div className="flex justify-between mb-4"><span className={`text-[10px] font-black px-2 py-1 rounded-lg ${c.bg} ${c.text}`}>{program?.category || '테라피'}</span><StatusBadge status={getProgramStatus(program)}/></div>
+      <h3 className="font-black text-[#0A1628] mb-4 leading-tight">{program?.title || '로딩중...'}</h3>
+      <div className="space-y-1 text-[11px] text-gray-400 font-bold mb-4"><div>{program?.location || '장소'}</div><div>{formatDate(program?.date)}</div></div>
       <div className="h-1 bg-gray-100 rounded-full overflow-hidden"><div className="h-full transition-all" style={{width: `${pct}%`, backgroundColor: c.solid}} /></div>
     </button>
   );
 };
 
 const ProgramDetailSheet = ({ program, onClose, onApply, colorMap }) => {
-  const c = colorMap[program.color] || colorMap['orange'];
+  const c = colorMap[program?.color] || colorMap['orange'];
   return (
     <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center bg-[#0A1628]/70 a-fade" onClick={onClose}>
       <div className="bg-white w-full lg:max-w-lg rounded-t-[2.5rem] p-8 a-sheet overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-8" />
         <div className="flex justify-between mb-6"><StatusBadge status={getProgramStatus(program)}/><button onClick={onClose}><X size={20}/></button></div>
-        <h2 className="text-[32px] font-black text-[#0A1628] leading-tight mb-4">{program.title}</h2>
-        <p className="text-gray-500 font-medium mb-8 leading-relaxed">{program.desc}</p>
+        <h2 className="text-[32px] font-black text-[#0A1628] leading-tight mb-4">{program?.title || '프로그램 정보'}</h2>
+        <p className="text-gray-500 font-medium mb-8 leading-relaxed">{program?.desc || '상세 정보가 없습니다.'}</p>
         <div className="grid grid-cols-2 gap-4 mb-8">
-          <InfoTile icon={MapPin} label="장소" value={program.location} />
-          <InfoTile icon={Calendar} label="마감일" value={formatDate(program.deadline)} />
+          <InfoTile icon={MapPin} label="장소" value={program?.location || '미정'} />
+          <InfoTile icon={Calendar} label="마감일" value={formatDate(program?.deadline)} />
         </div>
         <button onClick={onApply} disabled={getProgramStatus(program) !== '모집중'} className="w-full bg-[#0A1628] text-white py-5 rounded-[1.5rem] font-black shadow-xl active:scale-95 transition-all disabled:bg-gray-200">신청하기</button>
       </div>
@@ -500,9 +508,9 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
   const handleAddUser = async () => {
     if (!newUser.name || !newUser.empId) return;
     if (supabaseUrl !== 'https://placeholder.supabase.co') {
-      await supabase.from('registered_users').insert([{ name: newUser.name, emp_id: newUser.empId.toUpperCase() }]);
+      await supabase.from('registered_users').insert([{ name: newUser.name, emp_id: String(newUser.empId).toUpperCase() }]);
     }
-    setRegisteredUsers([{ name: newUser.name, empId: newUser.empId.toUpperCase() }, ...registeredUsers]);
+    setRegisteredUsers([{ name: newUser.name, empId: String(newUser.empId).toUpperCase() }, ...registeredUsers]);
     setNewUser({ name: '', empId: '' });
   };
 
@@ -526,12 +534,13 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
     const title = form.titleType === '기타' ? form.customTitle : form.titleType;
     if (!title || !form.date || !form.deadline || !form.capacity) return alert('필수 값을 모두 입력하세요.');
 
-    // 🔥 [안전장치 5] form.location이 비어있을 경우 방어
-    const locStr = form.location || '';
+    const locStr = String(form.location || '');
+    const tName = String(form.therapistName || '담당자');
+    
     const payload = {
       title, location: locStr, category: form.category, 
       date: form.date, deadline: form.deadline, capacity: parseInt(form.capacity),
-      therapist_name: form.therapistName, description: form.desc || '건강 테라피 세션입니다.',
+      therapist_name: tName, description: form.desc || '건강 테라피 세션입니다.',
       color: locStr.includes('안양') ? 'orange' : locStr.includes('부천') ? 'blue' : 'green'
     };
 
@@ -539,7 +548,7 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
       if (supabaseUrl !== 'https://placeholder.supabase.co') {
         await supabase.from('programs').update(payload).eq('id', editingId);
       }
-      setPrograms(prev => prev.map(p => p.id === editingId ? { ...p, ...payload, therapist: { ...p.therapist, name: form.therapistName, avatar: (form.therapistName || 'G').charAt(0) } } : p));
+      setPrograms(prev => prev.map(p => p.id === editingId ? { ...p, ...payload, therapist: { ...p.therapist, name: tName, avatar: tName.charAt(0) } } : p));
       alert('프로그램 수정 완료!');
       setEditingId(null);
     } else {
@@ -567,7 +576,7 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
           <button onClick={handleAddUser} className="bg-[#0A1628] text-white px-6 py-3 rounded-2xl font-black whitespace-nowrap">등록</button>
         </div>
         <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
-          {registeredUsers.map((u, i) => (
+          {Array.isArray(registeredUsers) && registeredUsers.map((u, i) => (
             <div key={i} className="flex justify-between bg-gray-50 p-3 rounded-xl">
               <div><span className="font-black text-[13px] text-[#0A1628]">{u.name}</span> <span className="text-[11px] text-gray-400">{u.empId}</span></div>
               <button onClick={async () => {
@@ -606,9 +615,9 @@ const AdminPanel = ({ programs, setPrograms, registeredUsers, setRegisteredUsers
 
       <div className="space-y-3">
         <h3 className="font-black text-[#0A1628]">프로그램 운영 현황</h3>
-        {programs.map(p => (
+        {Array.isArray(programs) && programs.map(p => (
           <div key={p.id} className="bg-white p-5 rounded-2xl border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
-            <div><div className="flex items-center gap-2"><h4 className="font-black text-[15px]">{p.title}</h4><StatusBadge status={getProgramStatus(p)}/></div><p className="text-[11px] text-gray-400 font-bold mt-1">{p.location} · {p.applied}/{p.capacity}명 신청</p></div>
+            <div><div className="flex items-center gap-2"><h4 className="font-black text-[15px]">{p?.title}</h4><StatusBadge status={getProgramStatus(p)}/></div><p className="text-[11px] text-gray-400 font-bold mt-1">{p?.location} · {p?.applied}/{p?.capacity}명 신청</p></div>
             <div className="flex gap-2 items-center">
               {getProgramStatus(p) === '모집마감' && <button onClick={() => onRunLottery(p.id)} className="bg-[#F47B20] text-white px-4 py-2 rounded-xl text-[11px] font-black shadow-md">추첨 실행</button>}
               <button onClick={() => handleEditClick(p)} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[11px] font-black">수정</button>
