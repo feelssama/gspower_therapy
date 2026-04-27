@@ -69,14 +69,18 @@ const getProgramStatus = (p) => {
   } catch(e) { return '모집중'; }
 };
 
+// 🔥 상태 뱃지에 당첨/탈락 컬러 추가
 const StatusBadge = ({ status }) => {
   const colors = {
     '모집중': 'bg-green-100 text-green-700',
     '모집마감': 'bg-red-100 text-red-600',
     '추첨완료': 'bg-purple-100 text-purple-700',
-    '종료': 'bg-gray-100 text-gray-500'
+    '종료': 'bg-gray-100 text-gray-500',
+    '당첨': 'bg-blue-500 text-white shadow-sm',
+    '대기(탈락)': 'bg-red-100 text-red-600',
+    '신청완료': 'bg-gray-200 text-gray-600'
   };
-  return <span className={`px-2 py-0.5 rounded text-[10px] font-black ${colors[status] || colors['종료']}`}>{status || '종료'}</span>;
+  return <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black ${colors[status] || colors['종료']}`}>{status || '종료'}</span>;
 };
 
 // ══════════════════════════════════════════════════════════
@@ -132,11 +136,13 @@ export default function TherapyApp() {
               setIsAdmin(true);
               setCurrentTab('admin');
             }
+            
+            // 🔥 앱 로딩 시 DB에서 'appStatus(당첨여부)'도 같이 가져와서 매핑!
             const { data: myApps } = await supabase.from('applications').select('*').eq('emp_id', parsedUser.empId);
             if (myApps && pData) {
               const mappedApps = myApps.map(a => {
                 const prog = pData.find(pr => pr.id === a.program_id);
-                return prog ? { ...prog, appId: a.id } : null;
+                return prog ? { ...prog, appId: a.id, appStatus: a.status } : null;
               }).filter(Boolean);
               setMyApplications(mappedApps);
             }
@@ -177,12 +183,13 @@ export default function TherapyApp() {
         localStorage.setItem('gs_isAdmin', 'true');
       }
       
+      // 🔥 로그인 시 DB에서 'appStatus(당첨여부)' 매핑
       if (supabaseUrl !== 'https://placeholder.supabase.co') {
         const { data: myApps } = await supabase.from('applications').select('*').eq('emp_id', found.empId);
         if (myApps) {
           const mappedApps = myApps.map(a => {
             const prog = programs.find(pr => pr.id === a.program_id);
-            return prog ? { ...prog, appId: a.id } : null;
+            return prog ? { ...prog, appId: a.id, appStatus: a.status } : null;
           }).filter(Boolean);
           setMyApplications(mappedApps);
         }
@@ -218,7 +225,8 @@ export default function TherapyApp() {
       const { data: insertedApp, error: insertError } = await supabase.from('applications').insert([{
         program_id: selectedProgram.id,
         emp_id: user.empId,
-        user_name: user.name
+        user_name: user.name,
+        status: '신청완료' // 기본값 명시
       }]).select();
 
       if (insertError) return alert(`신청 실패 (DB오류): ${insertError.message}`);
@@ -227,7 +235,7 @@ export default function TherapyApp() {
       await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
       
       setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: newCount } : p));
-      setMyApplications(prev => [...prev, { ...selectedProgram, applied: newCount, appId: insertedApp?.[0]?.id }]);
+      setMyApplications(prev => [...prev, { ...selectedProgram, applied: newCount, appId: insertedApp?.[0]?.id, appStatus: '신청완료' }]);
     }
     
     setShowConfirm(false); setShowDetail(false); setShowSuccess(true);
@@ -241,80 +249,49 @@ export default function TherapyApp() {
     alert('평점이 반영되었습니다! ⭐');
   };
 
-// 🔥 [V15.1] GS파워 공정 추첨 알고리즘 탑재
+  // 🔥 [V15.1] 완벽 복구된 추첨 알고리즘 (수정 없이 그대로 사용!)
   const handleLottery = async (programId) => {
     if (supabaseUrl === 'https://placeholder.supabase.co') return;
 
-    // 1. 추첨할 프로그램 정보(정원) 가져오기
     const targetProgram = programs.find(p => p.id === programId);
     if (!targetProgram) return;
     const capacity = targetProgram.capacity;
 
-    // 2. 이 프로그램에 신청한 현재 명단 싹 다 가져오기
-    const { data: currentApplicants } = await supabase
-      .from('applications')
-      .select('*')
-      .eq('program_id', programId);
+    const { data: currentApplicants } = await supabase.from('applications').select('*').eq('program_id', programId);
+    if (!currentApplicants || currentApplicants.length === 0) return alert('신청자가 없어 추첨을 진행할 수 없습니다.');
 
-    if (!currentApplicants || currentApplicants.length === 0) {
-      return alert('신청자가 없어 추첨을 진행할 수 없습니다.');
-    }
-
-    // 3. 과거에 당첨되었던 사람들 명단 가져오기 (페널티 대상자 색출)
-    const { data: pastWinners } = await supabase
-      .from('applications')
-      .select('emp_id')
-      .eq('status', '당첨')
-      .neq('program_id', programId); // 이번 프로그램은 제외
-
+    const { data: pastWinners } = await supabase.from('applications').select('emp_id').eq('status', '당첨').neq('program_id', programId);
     const pastWinnerIds = pastWinners ? pastWinners.map(a => a.emp_id) : [];
 
-    // 4. 신청자 그룹 분류 (1순위: 퓨어 신규, 2순위: 과거 당첨자)
     const firstPriority = [];
     const secondPriority = [];
-
     currentApplicants.forEach(app => {
-      if (pastWinnerIds.includes(app.emp_id)) {
-        secondPriority.push(app); // 페널티 대상
-      } else {
-        firstPriority.push(app);  // 1순위 우대 대상
-      }
+      if (pastWinnerIds.includes(app.emp_id)) secondPriority.push(app); 
+      else firstPriority.push(app);  
     });
 
-    // 5. 공정 무작위 셔플 (로또 통 돌리기)
     const shuffle = (array) => array.sort(() => Math.random() - 0.5);
-    shuffle(firstPriority);
-    shuffle(secondPriority);
+    shuffle(firstPriority); shuffle(secondPriority);
 
-    // 6. 당첨자 / 대기자 뽑기
     let winners = [];
     let losers = [];
 
     if (firstPriority.length >= capacity) {
-      // 1순위 신청자가 정원보다 많거나 같으면: 1순위 안에서만 추첨하고 끝! 2순위는 전원 광탈
       winners = firstPriority.slice(0, capacity);
       losers = [...firstPriority.slice(capacity), ...secondPriority];
     } else {
-      // 미달일 경우: 1순위는 전원 합격, 남은 자리를 2순위(과거 당첨자)들끼리 뺑뺑이 돌림
       winners = [...firstPriority];
       const remainingSeats = capacity - firstPriority.length;
       winners = [...winners, ...secondPriority.slice(0, remainingSeats)];
       losers = secondPriority.slice(remainingSeats);
     }
 
-    // 7. DB에 당첨자/탈락자 결과 도장 꽝 찍기!
-    if (winners.length > 0) {
-      await supabase.from('applications').update({ status: '당첨' }).in('id', winners.map(w => w.id));
-    }
-    if (losers.length > 0) {
-      await supabase.from('applications').update({ status: '대기(탈락)' }).in('id', losers.map(l => l.id));
-    }
+    if (winners.length > 0) await supabase.from('applications').update({ status: '당첨' }).in('id', winners.map(w => w.id));
+    if (losers.length > 0) await supabase.from('applications').update({ status: '대기(탈락)' }).in('id', losers.map(l => l.id));
 
-    // 8. 프로그램 상태 '추첨완료'로 변경
     await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', programId);
     setPrograms(prev => prev.map(p => p.id === programId ? { ...p, manualStatus: '추첨완료' } : p));
 
-    // 9. 관리자 화면에 띄워줄 결과 리포트 생성
     const resultHtml = `
       <div class="text-left w-full">
         <p class="font-black text-[15px] text-[#0A1628] mb-3">🎯 총 신청자: ${currentApplicants.length}명 (정원: ${capacity}명)</p>
@@ -329,9 +306,8 @@ export default function TherapyApp() {
         <p class="text-[12px] text-gray-500 bg-red-50 p-2 rounded-lg break-words leading-relaxed">${losers.map(l => l.user_name).join(', ') || '없음'}</p>
       </div>
     `;
-
     setLotteryResult(resultHtml);
-  };  
+  };
 
   const filtered = programs.filter(p => (filterLoc === '전체' || String(p.location||'').includes(filterLoc)) && (!searchQ || String(p.title||'').includes(searchQ)));
   const colorMap = {
@@ -355,7 +331,6 @@ export default function TherapyApp() {
             <button className="w-full bg-[#0A1628] text-white py-5 rounded-2xl font-black shadow-lg active:scale-95 transition-all">입장하기</button>
           </form>
           <button onClick={()=>setShowAdminGate(true)} className="mt-10 text-[12px] text-gray-400 font-bold flex items-center gap-1 mx-auto hover:text-[#1B3A6B]"><Shield size={12}/>관리자 접속</button>
-          <div className="mt-12 opacity-40 flex items-center justify-center gap-1"><Sparkles size={10} className="text-orange-500"/><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Powered by 부천안전/보건팀</span></div>
         </div>
         
         {showAdminGate && <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-6 a-fade">
@@ -437,17 +412,19 @@ export default function TherapyApp() {
               <div className="space-y-4">
                 {myApplications.map((p, i) => {
                   const c = colorMap[p?.color] || colorMap.orange;
-                  const status = getProgramStatus(p);
-                  const isCompleted = status === '종료'; 
+                  const isCompleted = getProgramStatus(p) === '종료'; 
+                  // 🔥 DB에서 가져온 상태(당첨, 대기, 신청완료)를 우선 보여줍니다!
+                  const displayStatus = p?.appStatus || '신청완료';
 
                   return (
                     <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-md">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${c.bg}`}><Stethoscope size={24} style={{color: c.solid}}/></div><div><h3 className="font-black text-[17px]">{p?.title}</h3><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {formatDate(p?.date)}</p></div></div>
-                        <StatusBadge status={isCompleted ? '종료' : '신청완료'} />
+                        <StatusBadge status={displayStatus} />
                       </div>
 
-                      {isCompleted ? (
+                      {/* 🔥 오직 '당첨자'이면서 프로그램이 '종료'되었을 때만 평점을 매길 수 있음! */}
+                      {isCompleted && displayStatus === '당첨' ? (
                         <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4 shadow-inner">
                           <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><ThumbsUp size={16} className="text-orange-500"/> 테라피는 어떠셨나요? 만족도를 평가해주세요!</div>
                           <div className="flex gap-1">
@@ -462,7 +439,13 @@ export default function TherapyApp() {
                             ))}
                           </div>
                         </div>
+                      ) : isCompleted ? (
+                        // 프로그램은 끝났는데 탈락자거나 신청만 한 경우
+                        <div className="bg-gray-50 p-4 rounded-2xl flex items-center justify-center gap-2 mt-4 shadow-inner">
+                          <p className="text-[12px] font-black text-gray-400">참여 대상자가 아니어 평점을 남길 수 없습니다.</p>
+                        </div>
                       ) : (
+                        // 아직 프로그램이 진행되지 않았을 경우
                         <div className="bg-gray-50 p-4 rounded-2xl flex items-center justify-center gap-2 mt-4 shadow-inner">
                           <Clock size={14} className="text-gray-400" />
                           <p className="text-[12px] font-black text-gray-400">프로그램이 완료된 후 평점을 남길 수 있습니다 ⏳</p>
@@ -498,7 +481,6 @@ export default function TherapyApp() {
         {isAdmin && <button onClick={()=>setCurrentTab('admin')} className={`flex flex-col items-center gap-1 ${currentTab==='admin'?'text-blue-600':'text-gray-300'}`}><Settings size={20}/><span className="text-[10px] font-black">관리</span></button>}
       </nav>
 
-      {/* 🔥 모달창(ProgramDetailSheet) 렌더링 호출 시 myApplications 전달! */}
       {showDetail && selectedProgram && <ProgramDetailSheet program={selectedProgram} myApplications={myApplications} colorMap={colorMap} onClose={()=>setShowDetail(false)} onApply={()=>setShowConfirm(true)} />}
       {showConfirm && <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-[100] a-fade backdrop-blur-sm"><div className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl"><h3 className="text-[20px] font-black mb-4">신청하시겠습니까?</h3><div className="bg-gray-50 p-4 rounded-2xl text-[14px] font-bold text-gray-600 mb-6">{selectedProgram.title}<br/>{formatDate(selectedProgram.date)}</div><div className="flex gap-2"><button onClick={()=>setShowConfirm(false)} className="flex-1 py-4 font-black bg-gray-100 rounded-2xl">취소</button><button onClick={applyProgram} className="flex-[2] py-4 font-black bg-[#0A1628] text-white rounded-2xl shadow-lg">확인</button></div></div></div>}
       {showSuccess && <div className="fixed inset-0 bg-white/90 flex items-center justify-center z-[200] a-fade"><div className="text-center"><div className="w-20 h-20 bg-green-500 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl"><Check size={40} strokeWidth={4}/></div><h2 className="text-[28px] font-black text-[#0A1628]">신청 완료!</h2></div></div>}
@@ -541,7 +523,6 @@ const CompactCard = ({ program, colorMap, onClick }) => {
   );
 };
 
-// 🔥 프로그램 상세 팝업 모달 UX 개편
 const ProgramDetailSheet = ({ program, colorMap, onClose, onApply, myApplications }) => {
   const isApplied = myApplications?.some(a => a.id === program.id);
   const status = getProgramStatus(program);
@@ -568,7 +549,6 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply, myApplication
         <h2 className="text-[32px] font-black text-[#0A1628] leading-tight mb-4">{program?.title}</h2>
         <p className="text-gray-500 font-medium mb-8 leading-relaxed">{program?.desc}</p>
         
-        {/* 🔥 현업 기획을 반영한 2x2 상세 그리드 */}
         <div className="grid grid-cols-2 gap-4 mb-10">
           <div className="bg-gray-50 p-5 rounded-2xl shadow-inner">
             <p className="text-[10px] font-black text-gray-400 uppercase mb-2 flex items-center gap-1"><MapPin size={12}/> 장소</p>
@@ -588,7 +568,6 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply, myApplication
           </div>
         </div>
         
-        {/* 🔥 상황에 맞게 텍스트와 디자인이 변하는 똑똑한 버튼 */}
         <button onClick={onApply} disabled={isDisabled} className={`w-full text-white py-5 rounded-3xl font-black shadow-xl active:scale-95 transition-transform ${isDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#0A1628]'}`}>
           {btnText}
         </button>
@@ -598,7 +577,7 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply, myApplication
 };
 
 // ══════════════════════════════════════════════════════════
-// 관리자 패널 
+// 관리자 패널
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
@@ -742,6 +721,10 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
                         <p className="text-[10px] text-gray-400 font-bold">{app.emp_id}</p>
                       </div>
                     </div>
+                    {/* 🔥 관리자 명단보기 화면에 당첨/대기(탈락) 뱃지 띄워주기! */}
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${app.status === '당첨' ? 'bg-blue-500 text-white' : app.status === '대기(탈락)' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+                      {app.status || '신청완료'}
+                    </span>
                   </div>
                 ))
               )}
