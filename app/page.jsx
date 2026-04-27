@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import {
   Shield, Calendar, MapPin, Clock, Users, ArrowRight, Check, X,
   ChevronRight, Plus, Home, Bell, Sparkles, Activity, TrendingUp,
-  BarChart3, LogOut, Search, Star, Award, Heart, Stethoscope, Dna, UserPlus, ThumbsUp, Edit2
+  Settings, LogOut, Search, Star, Award, Heart, Stethoscope, Dna, UserPlus, ThumbsUp, Edit
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -14,7 +14,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ══════════════════════════════════════════════════════════
-// 공통 컴포넌트 & 헬퍼 (철통 방어막 탑재)
+// 공통 컴포넌트 & 헬퍼
 // ══════════════════════════════════════════════════════════
 const GSLogo = ({ size = 56, onClick }) => (
   <div onClick={onClick} className={`flex items-center gap-1.5 ${onClick ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}>
@@ -91,7 +91,6 @@ export default function TherapyApp() {
   const [programs, setPrograms] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
 
-  // 데이터 로드 & 에러 방지 매핑
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -116,7 +115,11 @@ export default function TherapyApp() {
   const handleLogin = (e) => {
     e?.preventDefault();
     const found = registeredUsers.find(u => u.name === loginForm.name && u.empId === String(loginForm.empId).toUpperCase());
-    if (found) setUser(found);
+    if (found) {
+      setUser(found);
+      // 🔥 로그인 성공 시 관리자라면 자동으로 관리자 탭으로 이동!
+      if (isAdmin) setCurrentTab('admin'); 
+    }
     else alert('등록되지 않은 정보입니다.');
   };
 
@@ -167,8 +170,14 @@ export default function TherapyApp() {
           <button onClick={()=>setShowAdminGate(true)} className="mt-10 text-[12px] text-gray-400 font-bold flex items-center gap-1 mx-auto"><Shield size={12}/>관리자 접속</button>
           <div className="mt-12 opacity-40 flex items-center justify-center gap-1"><Sparkles size={10} className="text-orange-500"/><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Powered by 부천안전/보건팀</span></div>
         </div>
+        {/* 🔥 에러의 원흉이었던 로직 완전 개선! */}
         {showAdminGate && <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-6">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-sm"><h3 className="font-black mb-6">관리자 인증</h3><input type="password" value={adminPw} onChange={e=>setAdminPw(e.target.value)} placeholder="비밀번호" className="w-full bg-gray-100 p-4 rounded-xl mb-4 outline-none font-bold" /><button onClick={()=>{if(adminPw==='gspower1234'){setIsAdmin(true);setShowAdminGate(false);setCurrentTab('admin');}else alert('틀림');}} className="w-full bg-black text-white py-4 rounded-xl font-bold">인증하기</button></div>
+          <div className="bg-white p-8 rounded-3xl w-full max-w-sm"><h3 className="font-black mb-6">관리자 인증</h3><input type="password" value={adminPw} onChange={e=>setAdminPw(e.target.value)} placeholder="비밀번호" className="w-full bg-gray-100 p-4 rounded-xl mb-4 outline-none font-bold" />
+          <button onClick={()=>{
+            if(adminPw==='gspower1234'){
+              setIsAdmin(true); setShowAdminGate(false); alert('관리자 인증 완료! 로그인하시면 관리자 모드로 입장합니다.');
+            }else alert('비밀번호가 일치하지 않습니다.');
+          }} className="w-full bg-black text-white py-4 rounded-xl font-bold">인증하기</button></div>
         </div>}
       </div>
     );
@@ -183,7 +192,8 @@ export default function TherapyApp() {
           {[{id:'home',icon:Home,label:'홈'},{id:'programs',icon:Activity,label:'프로그램'},{id:'my',icon:Heart,label:'내 신청'}].map(m=>(
             <button key={m.id} onClick={()=>setCurrentTab(m.id)} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black transition-all ${currentTab===m.id?'bg-[#0A1628] text-white shadow-md':'text-gray-400 hover:bg-gray-50'}`}><m.icon size={18}/>{m.label}</button>
           ))}
-          {isAdmin && <button onClick={()=>setCurrentTab('admin')} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black mt-10 ${currentTab==='admin'?'bg-blue-600 text-white':'text-blue-500'}`}><BarChart3 size={18}/>관리자 센터</button>}
+          {/* 🔥 범인(BarChart3) 체포 완료! 안전한 Settings 아이콘으로 교체! */}
+          {isAdmin && <button onClick={()=>setCurrentTab('admin')} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black mt-10 ${currentTab==='admin'?'bg-blue-600 text-white':'text-blue-500'}`}><Settings size={18}/>관리자 센터</button>}
         </nav>
         <button onClick={()=>window.location.reload()} className="mt-auto flex items-center justify-center gap-2 text-gray-300 font-bold text-[12px]"><LogOut size={12}/>로그아웃</button>
       </aside>
@@ -257,6 +267,8 @@ export default function TherapyApp() {
         {[{id:'home',icon:Home,l:'홈'},{id:'programs',icon:Activity,l:'목록'},{id:'my',icon:Heart,l:'내 신청'}].map(m=>(
           <button key={m.id} onClick={()=>setCurrentTab(m.id)} className={`flex flex-col items-center gap-1 ${currentTab===m.id?'text-[#0A1628]':'text-gray-300'}`}><m.icon size={20}/><span className="text-[10px] font-black">{m.l}</span></button>
         ))}
+        {/* 모바일 화면에서도 관리자 버튼 추가! */}
+        {isAdmin && <button onClick={()=>setCurrentTab('admin')} className={`flex flex-col items-center gap-1 ${currentTab==='admin'?'text-blue-600':'text-gray-300'}`}><Settings size={20}/><span className="text-[10px] font-black">관리</span></button>}
       </nav>
 
       {showDetail && selectedProgram && <ProgramDetailSheet program={selectedProgram} colorMap={colorMap} onClose={()=>setShowDetail(false)} onApply={()=>setShowConfirm(true)} />}
@@ -321,7 +333,7 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply }) => {
 };
 
 // ══════════════════════════════════════════════════════════
-// 관리자 패널 (수정 기능 완벽 탑재)
+// 관리자 패널 (수정 기능 완벽 탑재 및 아이콘 교체)
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
@@ -378,7 +390,7 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
       </div>
 
       <div className={`p-8 rounded-[2.5rem] border-2 transition-all ${editingId?'border-orange-400 bg-orange-50/30':'border-gray-100 bg-white'}`}>
-        <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<Edit2 size={20}/>:<Plus size={20}/>} {editingId?'프로그램 내용 수정':'새 프로그램 개설'}</h3>
+        <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<Edit size={20}/>:<Plus size={20}/>} {editingId?'프로그램 내용 수정':'새 프로그램 개설'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><label className="text-[10px] font-black text-gray-400 mb-2 block">프로그램명</label><select value={form.titleType} onChange={e=>setForm({...form, titleType:e.target.value})} className={inputCls}><option>근골격계 테라피</option><option>스트레칭 클래스</option><option>기타</option></select></div>
           {form.titleType==='기타' && <div><label className="text-[10px] font-black text-gray-400 mb-2 block">직접 입력</label><input value={form.customTitle} onChange={e=>setForm({...form, customTitle:e.target.value})} className={inputCls} /></div>}
