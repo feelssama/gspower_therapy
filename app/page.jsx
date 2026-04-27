@@ -2,12 +2,11 @@
 // @ts-nocheck
 
 import { useState, useEffect, useRef } from 'react';
-// 🔥 [완벽 조치] 이 화면에서 쓰는 모든 아이콘 100% 장착! 절대 안 뻗습니다!
 import {
   Shield, Calendar, MapPin, Users, ArrowRight, Check, X,
   Plus, Home, Activity, TrendingUp, Settings, LogOut, 
   Search, Star, Award, Heart, UserPlus, Sparkles, Pencil, 
-  Stethoscope, ThumbsUp, FileText
+  Stethoscope, ThumbsUp, FileText, Clock
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -109,7 +108,6 @@ export default function TherapyApp() {
       try {
         if (supabaseUrl === 'https://placeholder.supabase.co') return;
         
-        // 1. 프로그램 로드
         const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
         if (pData && Array.isArray(pData)) {
           setPrograms(pData.map(p => ({
@@ -121,11 +119,9 @@ export default function TherapyApp() {
           })));
         }
         
-        // 2. 유저 로드
         const { data: uData } = await supabase.from('registered_users').select('*');
         if (uData && Array.isArray(uData)) setRegisteredUsers(uData.map(u => ({ name: u.name, empId: String(u.emp_id || '').toUpperCase() })));
         
-        // 3. 로컬스토리지 자동로그인 및 "내 신청내역 DB 연동"
         try {
           const savedUser = localStorage.getItem('gs_user');
           const savedIsAdmin = localStorage.getItem('gs_isAdmin');
@@ -136,7 +132,6 @@ export default function TherapyApp() {
               setIsAdmin(true);
               setCurrentTab('admin');
             }
-            // 🔥 앱 로드 시 DB에서 내 신청 이력 가져오기
             const { data: myApps } = await supabase.from('applications').select('*').eq('emp_id', parsedUser.empId);
             if (myApps && pData) {
               const mappedApps = myApps.map(a => {
@@ -182,7 +177,6 @@ export default function TherapyApp() {
         localStorage.setItem('gs_isAdmin', 'true');
       }
       
-      // 🔥 로그인 시 DB에서 내 신청 이력 가져오기
       if (supabaseUrl !== 'https://placeholder.supabase.co') {
         const { data: myApps } = await supabase.from('applications').select('*').eq('emp_id', found.empId);
         if (myApps) {
@@ -209,11 +203,11 @@ export default function TherapyApp() {
     window.location.reload();
   };
 
+  // 🔥 신청 로직: 에러 메시지를 띄워주도록 강화
   const applyProgram = async () => {
     if (!selectedProgram) return;
     
     if (supabaseUrl !== 'https://placeholder.supabase.co') {
-      // 🔥 1. 중복 신청 방어 로직! (DB에 이미 기록이 있는지 확인)
       const { data: existingApp } = await supabase
         .from('applications')
         .select('*')
@@ -223,25 +217,28 @@ export default function TherapyApp() {
       if (existingApp && existingApp.length > 0) {
         alert('이미 신청이 완료된 프로그램입니다!');
         setShowConfirm(false); setShowDetail(false);
-        return; // 여기서 멈춤 (중복 신청 차단)
+        return; 
       }
 
-      // 🔥 2. 새로운 신청 기록을 DB에 저장
-      const { data: insertedApp, error } = await supabase.from('applications').insert([{
+      const { data: insertedApp, error: insertError } = await supabase.from('applications').insert([{
         program_id: selectedProgram.id,
         emp_id: user.empId,
         user_name: user.name
       }]).select();
 
-      if (error) {
-        alert('신청 처리 중 오류가 발생했습니다.');
+      // DB 에러 시 상세 내역 알림
+      if (insertError) {
+        alert(`신청 실패 (DB오류): ${insertError.message}`);
         return;
       }
       
-      // 🔥 3. 프로그램 인원수 업데이트
       const newCount = (selectedProgram.applied || 0) + 1;
-      await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
+      const { error: updateError } = await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
       
+      if(updateError) {
+         console.warn("카운트 업데이트 실패:", updateError);
+      }
+
       setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: newCount } : p));
       setMyApplications(prev => [...prev, { ...selectedProgram, applied: newCount, appId: insertedApp?.[0]?.id }]);
     }
@@ -367,18 +364,30 @@ export default function TherapyApp() {
               <div className="space-y-4">
                 {myApplications.map((p, i) => {
                   const c = colorMap[p?.color] || colorMap.orange;
+                  const status = getProgramStatus(p);
+                  const isCompleted = status === '종료'; 
+
                   return (
                     <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-md">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${c.bg}`}><Stethoscope size={24} style={{color: c.solid}}/></div><div><h3 className="font-black text-[17px]">{p?.title}</h3><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {formatDate(p?.date)}</p></div></div>
-                        <StatusBadge status="신청완료" />
+                        <StatusBadge status={isCompleted ? '종료' : '신청완료'} />
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4 shadow-inner">
-                        <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><ThumbsUp size={16} className="text-orange-500"/> 만족도를 평가해주세요!</div>
-                        <div className="flex gap-1">
-                          {[1,2,3,4,5].map(s=>(<button key={s} onClick={()=>handleRate(p.id, s)} className="hover:scale-125 transition-transform"><Star size={24} className={s<=(p?.rating||0)?'fill-orange-400 text-orange-400':'text-gray-200'}/></button>))}
+
+                      {isCompleted ? (
+                        <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4 shadow-inner">
+                          <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><ThumbsUp size={16} className="text-orange-500"/> 테라피는 어떠셨나요? 만족도를 평가해주세요!</div>
+                          <div className="flex gap-1">
+                            {[1,2,3,4,5].map(s=>(<button key={s} onClick={()=>handleRate(p.id, s)} className="hover:scale-125 transition-transform"><Star size={24} className={s<=(p?.rating||0)?'fill-orange-400 text-orange-400':'text-gray-200'}/></button>))}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="bg-gray-50 p-4 rounded-2xl flex items-center justify-center gap-2 mt-4 shadow-inner">
+                          <Clock size={14} className="text-gray-400" />
+                          <p className="text-[12px] font-black text-gray-400">프로그램이 완료된 후 평점을 남길 수 있습니다 ⏳</p>
+                        </div>
+                      )}
+
                       <div className="mt-4 flex justify-end"><button onClick={async()=>{
                         if(confirm('신청을 취소하시겠습니까?')) {
                            if(p.appId && supabaseUrl !== 'https://placeholder.supabase.co') {
@@ -469,7 +478,7 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply }) => {
 };
 
 // ══════════════════════════════════════════════════════════
-// 관리자 패널 (🔥 명단 보기 및 엑셀 다운로드 대신 안전한 화면 뷰)
+// 관리자 패널 (🔥 수정, 삭제 에러 메세지 확인 로직 추가)
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
@@ -479,6 +488,7 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [viewingApplicants, setViewingApplicants] = useState(null);
   const [applicantsList, setApplicantsList] = useState([]);
 
+  // 🔥 저장/수정 시 에러 메시지 노출 로직 추가
   const handleCreateOrUpdate = async () => {
     const title = form.titleType === '기타' ? form.customTitle : form.titleType;
     const payload = {
@@ -486,8 +496,17 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
       capacity: parseInt(form.capacity), therapist_name: form.therapistName, description: form.desc || '테라피 세션',
       color: form.location.includes('안양') ? 'orange' : form.location.includes('부천') ? 'blue' : 'green'
     };
-    if (editingId) await supabase.from('programs').update(payload).eq('id', editingId);
-    else { payload.applied = 0; await supabase.from('programs').insert([payload]); }
+    
+    if (editingId) {
+      const { error } = await supabase.from('programs').update(payload).eq('id', editingId);
+      if (error) return alert('수정 실패 (DB오류): ' + error.message);
+      alert('수정 완료!');
+    } else {
+      payload.applied = 0;
+      const { error } = await supabase.from('programs').insert([payload]);
+      if (error) return alert('게시 실패 (DB오류): ' + error.message);
+      alert('게시 완료!');
+    }
     window.location.reload();
   };
 
@@ -555,7 +574,14 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
               {getProgramStatus(p) === '모집마감' && <button onClick={()=>onLottery(p.id)} className="bg-orange-500 text-white px-5 py-2.5 rounded-xl font-black text-[12px] shadow-lg active:scale-95">추첨 실행</button>}
               <button onClick={()=>fetchApplicants(p)} className="bg-green-50 text-green-700 px-5 py-2.5 rounded-xl font-black text-[12px] flex items-center gap-1"><FileText size={14}/>명단보기</button>
               <button onClick={()=>handleEditClick(p)} className="bg-blue-50 text-blue-600 px-5 py-2.5 rounded-xl font-black text-[12px]">수정</button>
-              <button onClick={async()=>{if(confirm('삭제?')){await supabase.from('programs').delete().eq('id', p.id); window.location.reload();}}} className="bg-red-50 text-red-500 px-5 py-2.5 rounded-xl font-black text-[12px]">삭제</button>
+              {/* 🔥 삭제 시 에러 메시지 노출 로직 추가 */}
+              <button onClick={async()=>{
+                if(confirm('정말 삭제하시겠습니까?')){
+                  const { error } = await supabase.from('programs').delete().eq('id', p.id); 
+                  if (error) alert('삭제 실패 (DB오류): ' + error.message);
+                  else window.location.reload();
+                }
+              }} className="bg-red-50 text-red-500 px-5 py-2.5 rounded-xl font-black text-[12px]">삭제</button>
             </div>
           </div>
         ))}
