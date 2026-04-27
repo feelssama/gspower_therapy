@@ -2,10 +2,11 @@
 // @ts-nocheck
 
 import { useState, useEffect, useRef } from 'react';
+// 🔥 [완벽 조치] 앱에서 쓰는 모든 아이콘을 단 하나도 빠짐없이 선언했습니다!
 import {
   Shield, Calendar, MapPin, Users, ArrowRight, Check, X,
   Plus, Home, Activity, TrendingUp, Settings, LogOut, 
-  Search, Star, Award, Heart, UserPlus
+  Search, Star, Award, Heart, UserPlus, Sparkles, Stethoscope, ThumbsUp, Pencil
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -41,6 +42,9 @@ const GlobalStyles = () => (
     .a-fade { animation: fadeIn .4s ease-out both; }
     .a-slide-up { animation: slideUp .5s cubic-bezier(0.16,1,0.3,1) both; }
     .stagger > * { opacity: 0; animation: slideUp .5s cubic-bezier(0.16,1,0.3,1) forwards; }
+    .stagger > *:nth-child(1) { animation-delay: .05s; }
+    .stagger > *:nth-child(2) { animation-delay: .1s; }
+    .stagger > *:nth-child(3) { animation-delay: .15s; }
     .hide-scrollbar::-webkit-scrollbar { display: none; }
   `}</style>
 );
@@ -74,7 +78,7 @@ const StatusBadge = ({ status }) => {
 };
 
 // ══════════════════════════════════════════════════════════
-// Main Application (V11.0 자동로그인 & 30분 타이머)
+// Main Application 
 // ══════════════════════════════════════════════════════════
 export default function TherapyApp() {
   const [user, setUser] = useState(null);
@@ -95,13 +99,11 @@ export default function TherapyApp() {
   const [programs, setPrograms] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
 
-  // 자동 로그아웃용 타이머 참조
   const timeoutRef = useRef(null);
 
-  // 1. 데이터 로드 및 로컬스토리지 복구 (자동 로그인)
+  // 1. 데이터 로드 및 로컬스토리지 복구 (자동 로그인 방어코드 추가)
   useEffect(() => {
     const initApp = async () => {
-      // (1) Supabase 데이터 로드
       try {
         if (supabaseUrl !== 'https://placeholder.supabase.co') {
           const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
@@ -117,27 +119,28 @@ export default function TherapyApp() {
         }
       } catch (e) { console.error(e); }
 
-      // (2) 🔥 자동 로그인 복구
-      const savedUser = localStorage.getItem('gs_user');
-      const savedIsAdmin = localStorage.getItem('gs_isAdmin');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-        if (savedIsAdmin === 'true') {
-          setIsAdmin(true);
-          setCurrentTab('admin');
+      // 🔥 로컬스토리지 에러 방어
+      try {
+        const savedUser = localStorage.getItem('gs_user');
+        const savedIsAdmin = localStorage.getItem('gs_isAdmin');
+        if (savedUser) {
+          setUser(JSON.parse(savedUser));
+          if (savedIsAdmin === 'true') {
+            setIsAdmin(true);
+            setCurrentTab('admin');
+          }
         }
+      } catch (e) {
+        localStorage.removeItem('gs_user');
       }
     };
     initApp();
   }, []);
 
-  // 2. 🔥 30분 자동 로그아웃 로직
+  // 2. 30분 자동 로그아웃 로직
   const resetTimer = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (user) {
-      // 30분(1800000ms) 무활동 시 로그아웃
-      timeoutRef.current = setTimeout(handleLogout, 1800000); 
-    }
+    if (user) timeoutRef.current = setTimeout(handleLogout, 1800000); 
   };
 
   useEffect(() => {
@@ -157,7 +160,7 @@ export default function TherapyApp() {
     const found = registeredUsers.find(u => u.name === loginForm.name && u.empId === String(loginForm.empId).toUpperCase());
     if (found) {
       setUser(found);
-      localStorage.setItem('gs_user', JSON.stringify(found)); // 로컬 저장
+      localStorage.setItem('gs_user', JSON.stringify(found));
       if (isAdmin) {
         setCurrentTab('admin');
         localStorage.setItem('gs_isAdmin', 'true');
@@ -228,7 +231,7 @@ export default function TherapyApp() {
             <button className="w-full bg-[#0A1628] text-white py-5 rounded-2xl font-black shadow-lg active:scale-95 transition-all">입장하기</button>
           </form>
           <button onClick={()=>setShowAdminGate(true)} className="mt-10 text-[12px] text-gray-400 font-bold flex items-center gap-1 mx-auto hover:text-[#1B3A6B]"><Shield size={12}/>관리자 접속</button>
-          <div className="mt-12 opacity-40 flex items-center justify-center gap-1"><span className="text-[14px]">✨</span><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Powered by 부천안전/보건팀</span></div>
+          <div className="mt-12 opacity-40 flex items-center justify-center gap-1"><Sparkles size={10} className="text-orange-500"/><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Powered by 부천안전/보건팀</span></div>
         </div>
         
         {showAdminGate && <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-6 a-fade">
@@ -272,7 +275,7 @@ export default function TherapyApp() {
             <div className="bg-[#0A1628] rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl">
               <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-orange-500/20 rounded-full blur-3xl"/>
               <h1 className="text-[36px] font-black leading-tight mb-4">{user.name}님,<br/>오늘도 건강하세요</h1>
-              <p className="text-white/50 text-[14px] mb-8 font-medium">부천사업소 안전/보건팀이 임직원의 건강을 응원합니다.</p>
+              <p className="text-white/50 text-[14px] mb-8 font-medium">안전과 보건을 생각하는 부천사업소 전용 포털</p>
               <button onClick={()=>setCurrentTab('programs')} className="bg-white text-[#0A1628] px-6 py-3 rounded-2xl font-black text-[14px] flex items-center gap-2 shadow-lg hover:scale-105 transition-transform">프로그램 보기 <ArrowRight size={16}/></button>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
@@ -313,11 +316,11 @@ export default function TherapyApp() {
                   return (
                     <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-md">
                       <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${c.bg}`}>🩺</div><div><h3 className="font-black text-[17px]">{p?.title}</h3><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {formatDate(p?.date)}</p></div></div>
+                        <div className="flex items-center gap-3"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${c.bg}`}><Stethoscope size={24} style={{color: c.solid}}/></div><div><h3 className="font-black text-[17px]">{p?.title}</h3><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {formatDate(p?.date)}</p></div></div>
                         <StatusBadge status="신청완료" />
                       </div>
                       <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4 shadow-inner">
-                        <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><span className="text-[16px]">👍</span> 만족도를 평가해주세요!</div>
+                        <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><ThumbsUp size={16} className="text-orange-500"/> 만족도를 평가해주세요!</div>
                         <div className="flex gap-1">
                           {[1,2,3,4,5].map(s=>(<button key={s} onClick={()=>handleRate(p.id, s)} className="hover:scale-125 transition-transform"><Star size={24} className={s<=(p?.rating||0)?'fill-orange-400 text-orange-400':'text-gray-200'}/></button>))}
                         </div>
@@ -349,7 +352,7 @@ export default function TherapyApp() {
 }
 
 // ══════════════════════════════════════════════════════════
-// 하위 컴포넌트들 (변경 없음)
+// 하위 컴포넌트들
 // ══════════════════════════════════════════════════════════
 const StatCard = ({ icon:Icon, label, value, suffix, color }) => (
   <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"><div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{backgroundColor: color+'15'}}><Icon size={16} style={{color}}/></div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</p><div className="flex items-baseline gap-1"><span className="text-[22px] font-black text-[#0A1628]">{value}</span><span className="text-[11px] font-bold text-gray-400">{suffix}</span></div></div>
@@ -447,7 +450,7 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
         </div>
       </div>
       <div className={`p-8 rounded-[2.5rem] border-2 transition-all ${editingId?'border-orange-400 bg-orange-50/30':'border-gray-100 bg-white shadow-sm'}`}>
-        <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<span className="text-xl">✏️</span>:<Plus size={20}/>} {editingId?'내용 수정하기':'새 프로그램 개설'}</h3>
+        <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<Pencil size={20}/>:<Plus size={20}/>} {editingId?'내용 수정하기':'새 프로그램 개설'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="프로그램명"><select value={form.titleType} onChange={e=>setForm({...form, titleType:e.target.value})} className={inputCls}><option>근골격계 테라피</option><option>스트레칭 클래스</option><option>기타</option></select></Field>
           {form.titleType==='기타' && <Field label="직접 입력"><input value={form.customTitle} onChange={e=>setForm({...form, customTitle:e.target.value})} className={inputCls} /></Field>}
