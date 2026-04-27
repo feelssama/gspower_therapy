@@ -2,7 +2,7 @@
 // @ts-nocheck
 
 import { useState, useEffect, useRef } from 'react';
-// 🔥 [완벽 조치] 이 화면에서 쓰는 23개의 모든 아이콘 100% 장착 완료! 절대 안 뻗습니다!
+// 🔥 [완벽 조치] 이 화면에서 쓰는 모든 아이콘 100% 장착! 절대 안 뻗습니다!
 import {
   Shield, Calendar, MapPin, Users, ArrowRight, Check, X,
   Plus, Home, Activity, TrendingUp, Settings, LogOut, 
@@ -16,7 +16,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ══════════════════════════════════════════════════════════
-// 공통 컴포넌트 & 헬퍼 (GS파워 로고 포함)
+// 공통 컴포넌트 & 헬퍼
 // ══════════════════════════════════════════════════════════
 const GSLogo = ({ size = 56, onClick }) => {
   const [imgError, setImgError] = useState(false);
@@ -109,6 +109,7 @@ export default function TherapyApp() {
       try {
         if (supabaseUrl === 'https://placeholder.supabase.co') return;
         
+        // 1. 프로그램 로드
         const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
         if (pData && Array.isArray(pData)) {
           setPrograms(pData.map(p => ({
@@ -120,9 +121,11 @@ export default function TherapyApp() {
           })));
         }
         
+        // 2. 유저 로드
         const { data: uData } = await supabase.from('registered_users').select('*');
         if (uData && Array.isArray(uData)) setRegisteredUsers(uData.map(u => ({ name: u.name, empId: String(u.emp_id || '').toUpperCase() })));
         
+        // 3. 로컬스토리지 자동로그인 및 "내 신청내역 DB 연동"
         try {
           const savedUser = localStorage.getItem('gs_user');
           const savedIsAdmin = localStorage.getItem('gs_isAdmin');
@@ -133,6 +136,7 @@ export default function TherapyApp() {
               setIsAdmin(true);
               setCurrentTab('admin');
             }
+            // 🔥 앱 로드 시 DB에서 내 신청 이력 가져오기
             const { data: myApps } = await supabase.from('applications').select('*').eq('emp_id', parsedUser.empId);
             if (myApps && pData) {
               const mappedApps = myApps.map(a => {
@@ -178,6 +182,7 @@ export default function TherapyApp() {
         localStorage.setItem('gs_isAdmin', 'true');
       }
       
+      // 🔥 로그인 시 DB에서 내 신청 이력 가져오기
       if (supabaseUrl !== 'https://placeholder.supabase.co') {
         const { data: myApps } = await supabase.from('applications').select('*').eq('emp_id', found.empId);
         if (myApps) {
@@ -192,14 +197,14 @@ export default function TherapyApp() {
   };
 
   const handleLogout = () => {
-    setUser(null); setIsAdmin(false); setCurrentTab('home');
+    setUser(null); setIsAdmin(false); setCurrentTab('home'); setMyApplications([]);
     localStorage.removeItem('gs_user'); localStorage.removeItem('gs_isAdmin');
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     alert('보안을 위해 30분간 활동이 없어 자동 로그아웃 되었습니다.');
   };
 
   const manualLogout = () => {
-    setUser(null); setIsAdmin(false);
+    setUser(null); setIsAdmin(false); setMyApplications([]);
     localStorage.removeItem('gs_user'); localStorage.removeItem('gs_isAdmin');
     window.location.reload();
   };
@@ -208,12 +213,32 @@ export default function TherapyApp() {
     if (!selectedProgram) return;
     
     if (supabaseUrl !== 'https://placeholder.supabase.co') {
-      const { data: insertedApp } = await supabase.from('applications').insert([{
+      // 🔥 1. 중복 신청 방어 로직! (DB에 이미 기록이 있는지 확인)
+      const { data: existingApp } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('program_id', selectedProgram.id)
+        .eq('emp_id', user.empId);
+
+      if (existingApp && existingApp.length > 0) {
+        alert('이미 신청이 완료된 프로그램입니다!');
+        setShowConfirm(false); setShowDetail(false);
+        return; // 여기서 멈춤 (중복 신청 차단)
+      }
+
+      // 🔥 2. 새로운 신청 기록을 DB에 저장
+      const { data: insertedApp, error } = await supabase.from('applications').insert([{
         program_id: selectedProgram.id,
         emp_id: user.empId,
         user_name: user.name
       }]).select();
+
+      if (error) {
+        alert('신청 처리 중 오류가 발생했습니다.');
+        return;
+      }
       
+      // 🔥 3. 프로그램 인원수 업데이트
       const newCount = (selectedProgram.applied || 0) + 1;
       await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
       
@@ -361,7 +386,7 @@ export default function TherapyApp() {
                              const newCount = Math.max(0, (p.applied || 1) - 1);
                              await supabase.from('programs').update({ applied: newCount }).eq('id', p.id);
                              setPrograms(prev => prev.map(pr => pr.id === p.id ? { ...pr, applied: newCount } : pr));
-                             setMyApplications(prev => prev.filter(app => app.id !== p.id));
+                             setMyApplications(prev => prev.filter(app => app.appId !== p.appId));
                            }
                         }
                       }} className="text-[11px] font-bold text-gray-300 hover:text-red-500">신청 취소하기</button></div>
@@ -444,7 +469,7 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply }) => {
 };
 
 // ══════════════════════════════════════════════════════════
-// 관리자 패널
+// 관리자 패널 (🔥 명단 보기 및 엑셀 다운로드 대신 안전한 화면 뷰)
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
@@ -505,7 +530,7 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
       </div>
       
       <div className={`p-8 rounded-[2.5rem] border-2 transition-all ${editingId?'border-orange-400 bg-orange-50/30':'border-gray-100 bg-white shadow-sm'}`}>
-        <h3 className="font-black mb-6 flex items-center gap-2"><span className="text-xl">{editingId?'✏️':'➕'}</span> {editingId?'내용 수정하기':'새 프로그램 개설'}</h3>
+        <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<Pencil size={20}/>:<Plus size={20}/>} {editingId?'내용 수정하기':'새 프로그램 개설'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="프로그램명"><select value={form.titleType} onChange={e=>setForm({...form, titleType:e.target.value})} className={inputCls}><option>근골격계 테라피</option><option>스트레칭 클래스</option><option>기타</option></select></Field>
           {form.titleType==='기타' && <Field label="직접 입력"><input value={form.customTitle} onChange={e=>setForm({...form, customTitle:e.target.value})} className={inputCls} /></Field>}
