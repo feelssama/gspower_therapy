@@ -1,12 +1,11 @@
 'use client';
 // @ts-nocheck
 
-import { useState, useEffect, useRef } from 'react';
-// 🔥 [완벽 조치] 앱에서 쓰는 모든 아이콘을 단 하나도 빠짐없이 선언했습니다!
+import { useState, useEffect } from 'react';
 import {
   Shield, Calendar, MapPin, Users, ArrowRight, Check, X,
   Plus, Home, Activity, TrendingUp, Settings, LogOut, 
-  Search, Star, Award, Heart, UserPlus, Sparkles, Stethoscope, ThumbsUp, Pencil
+  Search, Star, Award, Heart, UserPlus
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -15,7 +14,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ══════════════════════════════════════════════════════════
-// GS파워 로고 컴포넌트
+// 공통 컴포넌트 & 헬퍼 (GS파워 로고 포함)
 // ══════════════════════════════════════════════════════════
 const GSLogo = ({ size = 56, onClick }) => {
   const [imgError, setImgError] = useState(false);
@@ -61,10 +60,12 @@ const getProgramStatus = (p) => {
   if (!p) return '종료';
   if (p.manualStatus) return p.manualStatus; 
   if (!p.date || !p.deadline) return '모집중';
-  const today = new Date().toISOString().split('T')[0];
-  if (p.date < today) return '종료';
-  if (p.deadline < today) return '모집마감';
-  return '모집중';
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    if (p.date < today) return '종료';
+    if (p.deadline < today) return '모집마감';
+    return '모집중';
+  } catch(e) { return '모집중'; }
 };
 
 const StatusBadge = ({ status }) => {
@@ -78,7 +79,7 @@ const StatusBadge = ({ status }) => {
 };
 
 // ══════════════════════════════════════════════════════════
-// Main Application 
+// Main Application
 // ══════════════════════════════════════════════════════════
 export default function TherapyApp() {
   const [user, setUser] = useState(null);
@@ -99,97 +100,41 @@ export default function TherapyApp() {
   const [programs, setPrograms] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
 
-  const timeoutRef = useRef(null);
-
-  // 1. 데이터 로드 및 로컬스토리지 복구 (자동 로그인 방어코드 추가)
   useEffect(() => {
-    const initApp = async () => {
+    const fetchData = async () => {
       try {
-        if (supabaseUrl !== 'https://placeholder.supabase.co') {
-          const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
-          if (pData) setPrograms(pData.map(p => ({
+        if (supabaseUrl === 'https://placeholder.supabase.co') return;
+        const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
+        if (pData && Array.isArray(pData)) {
+          setPrograms(pData.map(p => ({
             id: p.id, title: p.title || '테라피', category: p.category || '물리치료', location: p.location || '부천사업소',
             date: p.date || '', deadline: p.deadline || '', capacity: p.capacity || 10, applied: p.applied || 0,
             rating: p.rating || 5.0, manualStatus: p.manual_status,
             therapist: { name: p.therapist_name || '담당자', role: p.therapist_role || '전문가', avatar: String(p.therapist_name || 'G').charAt(0) },
             desc: p.description || '', color: p.color || 'orange'
           })));
-          const { data: uData } = await supabase.from('registered_users').select('*');
-          if (uData) setRegisteredUsers(uData.map(u => ({ name: u.name, empId: String(u.emp_id || '').toUpperCase() })));
         }
+        const { data: uData } = await supabase.from('registered_users').select('*');
+        if (uData && Array.isArray(uData)) setRegisteredUsers(uData.map(u => ({ name: u.name, empId: String(u.emp_id || '').toUpperCase() })));
       } catch (e) { console.error(e); }
-
-      // 🔥 로컬스토리지 에러 방어
-      try {
-        const savedUser = localStorage.getItem('gs_user');
-        const savedIsAdmin = localStorage.getItem('gs_isAdmin');
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
-          if (savedIsAdmin === 'true') {
-            setIsAdmin(true);
-            setCurrentTab('admin');
-          }
-        }
-      } catch (e) {
-        localStorage.removeItem('gs_user');
-      }
     };
-    initApp();
+    fetchData();
   }, []);
-
-  // 2. 30분 자동 로그아웃 로직
-  const resetTimer = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (user) timeoutRef.current = setTimeout(handleLogout, 1800000); 
-  };
-
-  useEffect(() => {
-    if (user) {
-      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-      events.forEach(e => window.addEventListener(e, resetTimer));
-      resetTimer();
-      return () => {
-        events.forEach(e => window.removeEventListener(e, resetTimer));
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      };
-    }
-  }, [user]);
 
   const handleLogin = (e) => {
     e?.preventDefault();
     const found = registeredUsers.find(u => u.name === loginForm.name && u.empId === String(loginForm.empId).toUpperCase());
     if (found) {
       setUser(found);
-      localStorage.setItem('gs_user', JSON.stringify(found));
-      if (isAdmin) {
-        setCurrentTab('admin');
-        localStorage.setItem('gs_isAdmin', 'true');
-      }
-    } else alert('등록되지 않은 정보입니다.');
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    setIsAdmin(false);
-    setCurrentTab('home');
-    localStorage.removeItem('gs_user');
-    localStorage.removeItem('gs_isAdmin');
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    alert('보안을 위해 30분간 활동이 없어 자동 로그아웃 되었습니다.');
-  };
-
-  const manualLogout = () => {
-    setUser(null);
-    setIsAdmin(false);
-    localStorage.removeItem('gs_user');
-    localStorage.removeItem('gs_isAdmin');
-    window.location.reload();
+      if (isAdmin) setCurrentTab('admin'); 
+    }
+    else alert('등록되지 않은 정보입니다.');
   };
 
   const applyProgram = async () => {
     if (!selectedProgram) return;
     const newCount = (selectedProgram.applied || 0) + 1;
-    await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
+    if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
     setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: newCount } : p));
     setMyApplications(prev => [...prev, { ...selectedProgram, applied: newCount }]);
     setShowConfirm(false); setShowDetail(false); setShowSuccess(true);
@@ -197,14 +142,14 @@ export default function TherapyApp() {
   };
 
   const handleRate = async (pid, rate) => {
-    await supabase.from('programs').update({ rating: rate }).eq('id', pid);
+    if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').update({ rating: rate }).eq('id', pid);
     setPrograms(prev => prev.map(p => p.id === pid ? { ...p, rating: rate } : p));
     setMyApplications(prev => prev.map(p => p.id === pid ? { ...p, rating: rate } : p));
     alert('평점이 반영되었습니다! ⭐');
   };
 
   const handleLottery = async (id) => {
-    await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', id);
+    if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', id);
     setPrograms(prev => prev.map(p => p.id === id ? { ...p, manualStatus: '추첨완료' } : p));
     setLotteryResult('추첨 알고리즘이 성공적으로 가동되었습니다.');
   };
@@ -224,17 +169,17 @@ export default function TherapyApp() {
           <div className="mb-10 inline-block bg-white px-8 py-5 rounded-3xl shadow-sm"><GSLogo size={50} /></div>
           <h1 className="text-[32px] font-black leading-tight mb-8 text-[#0A1628]">건강한 당신이<br/><span className="bg-gradient-to-r from-[#F47B20] via-[#1B3A6B] to-[#5CB85C] bg-clip-text text-transparent">곧 건강한 회사입니다</span></h1>
           <form onSubmit={handleLogin} className="space-y-3">
-            <div className="bg-white rounded-2xl border border-gray-100 p-1 shadow-sm">
+            <div className="bg-white rounded-2xl border border-gray-100 p-1">
               <input value={loginForm.name} onChange={e=>setLoginForm({...loginForm, name:e.target.value})} placeholder="성함" className="w-full p-4 text-[16px] font-bold outline-none border-b border-gray-50" />
               <input value={loginForm.empId} onChange={e=>setLoginForm({...loginForm, empId:e.target.value})} placeholder="사번 (C80XXXX)" className="w-full p-4 text-[16px] font-bold outline-none" />
             </div>
-            <button className="w-full bg-[#0A1628] text-white py-5 rounded-2xl font-black shadow-lg active:scale-95 transition-all">입장하기</button>
+            <button className="w-full bg-[#0A1628] text-white py-5 rounded-2xl font-black shadow-lg">입장하기</button>
           </form>
           <button onClick={()=>setShowAdminGate(true)} className="mt-10 text-[12px] text-gray-400 font-bold flex items-center gap-1 mx-auto hover:text-[#1B3A6B]"><Shield size={12}/>관리자 접속</button>
-          <div className="mt-12 opacity-40 flex items-center justify-center gap-1"><Sparkles size={10} className="text-orange-500"/><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Powered by 부천안전/보건팀</span></div>
+          <div className="mt-12 opacity-40 flex items-center justify-center gap-1"><span className="text-[14px]">✨</span><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Powered by 부천안전/보건팀</span></div>
         </div>
         
-        {showAdminGate && <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-6 a-fade">
+        {showAdminGate && <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-6">
           <div className="bg-white p-8 rounded-3xl w-full max-w-sm">
             <h3 className="font-black mb-6 flex items-center gap-2"><Shield size={18} className="text-[#1B3A6B]"/>관리자 인증</h3>
             <input type="password" value={adminPw} onChange={e=>setAdminPw(e.target.value)} placeholder="비밀번호를 입력하세요" className="w-full bg-gray-100 p-4 rounded-xl mb-4 outline-none font-bold focus:bg-white border-2 border-transparent focus:border-[#1B3A6B]" />
@@ -243,7 +188,7 @@ export default function TherapyApp() {
               <button onClick={()=>{
                 if(adminPw==='gspower1234'){
                   setIsAdmin(true); setShowAdminGate(false); setAdminPw('');
-                  alert('인증 완료! 이제 로그인하시면 관리자 모드로 접속됩니다.');
+                  alert('인증 완료! 이제 성함/사번으로 로그인하시면 관리자 모드로 접속됩니다.');
                 } else { alert('비밀번호가 일치하지 않습니다.'); }
               }} className="flex-[2] bg-[#0A1628] text-white py-4 rounded-xl font-bold">인증하기</button>
             </div>
@@ -257,26 +202,25 @@ export default function TherapyApp() {
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col lg:flex-row">
       <GlobalStyles />
       <aside className="hidden lg:flex flex-col w-[260px] bg-white border-r border-gray-100 p-8 sticky top-0 h-screen">
-        <div className="mb-12"><GSLogo size={40} onClick={()=>setCurrentTab('home')} /></div>
+        <div className="mb-12"><GSLogo size={40} /></div>
         <nav className="space-y-2">
           {[{id:'home',icon:Home,label:'홈'},{id:'programs',icon:Activity,label:'프로그램'},{id:'my',icon:Heart,label:'내 신청'}].map(m=>(
             <button key={m.id} onClick={()=>setCurrentTab(m.id)} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black transition-all ${currentTab===m.id?'bg-[#0A1628] text-white shadow-md':'text-gray-400 hover:bg-gray-50'}`}><m.icon size={18}/>{m.label}</button>
           ))}
-          {isAdmin && <button onClick={()=>setCurrentTab('admin')} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black mt-10 ${currentTab==='admin'?'bg-blue-600 text-white shadow-md':'text-blue-500 hover:bg-blue-50'}`}><Settings size={18}/>관리자 센터</button>}
+          {isAdmin && <button onClick={()=>setCurrentTab('admin')} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black mt-10 ${currentTab==='admin'?'bg-blue-600 text-white':'text-blue-500'}`}><Settings size={18}/>관리자 센터</button>}
         </nav>
-        <button onClick={manualLogout} className="mt-auto flex items-center justify-center gap-2 text-gray-300 font-bold text-[12px] hover:text-red-400"><LogOut size={12}/>로그아웃</button>
+        <button onClick={()=>window.location.reload()} className="mt-auto flex items-center justify-center gap-2 text-gray-300 font-bold text-[12px] hover:text-red-400"><LogOut size={12}/>로그아웃</button>
       </aside>
 
       <main className="flex-1 p-5 lg:p-12 pb-24 overflow-x-hidden">
-        <div className="lg:hidden mb-6 flex justify-between items-center"><GSLogo size={36} onClick={()=>setCurrentTab('home')} /><button onClick={manualLogout} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-gray-100 text-red-400 shadow-sm"><LogOut size={18}/></button></div>
+        <div className="lg:hidden mb-6 flex justify-between items-center"><GSLogo size={36}/><button onClick={()=>window.location.reload()} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-gray-100 text-red-400"><LogOut size={18}/></button></div>
         
         {currentTab === 'home' && (
           <div className="space-y-8 a-fade">
-            <div className="bg-[#0A1628] rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl">
+            <div className="bg-[#0A1628] rounded-[2.5rem] p-10 text-white relative overflow-hidden">
               <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-orange-500/20 rounded-full blur-3xl"/>
               <h1 className="text-[36px] font-black leading-tight mb-4">{user.name}님,<br/>오늘도 건강하세요</h1>
-              <p className="text-white/50 text-[14px] mb-8 font-medium">안전과 보건을 생각하는 부천사업소 전용 포털</p>
-              <button onClick={()=>setCurrentTab('programs')} className="bg-white text-[#0A1628] px-6 py-3 rounded-2xl font-black text-[14px] flex items-center gap-2 shadow-lg hover:scale-105 transition-transform">프로그램 보기 <ArrowRight size={16}/></button>
+              <button onClick={()=>setCurrentTab('programs')} className="bg-white text-[#0A1628] px-6 py-3 rounded-2xl font-black text-[14px] flex items-center gap-2 shadow-lg">프로그램 보기 <ArrowRight size={16}/></button>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
               <StatCard icon={Activity} label="참여 프로그램" value={myApplications.length} suffix="건" color="#F47B20" />
@@ -293,10 +237,10 @@ export default function TherapyApp() {
         {currentTab === 'programs' && (
           <div className="space-y-8 a-fade">
             <div className="flex flex-col gap-4">
-              <div className="relative shadow-sm"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" /><input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="검색어를 입력하세요" className="w-full bg-white border border-gray-100 rounded-3xl pl-12 py-5 font-black outline-none focus:border-[#0A1628]" /></div>
+              <div className="relative"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" /><input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="검색어를 입력하세요" className="w-full bg-white border border-gray-100 rounded-3xl pl-12 py-5 font-black outline-none focus:border-[#0A1628]" /></div>
               <div className="flex gap-2 overflow-x-auto hide-scrollbar">
                 {['전체','부천','안양','서울'].map(l=>(
-                  <button key={l} onClick={()=>setFilterLoc(l)} className={`px-6 py-2.5 rounded-full text-[13px] font-black whitespace-nowrap transition-all ${filterLoc===l?'bg-[#0A1628] text-white shadow-lg':'bg-white text-gray-400 border border-gray-100 shadow-sm'}`}>{l=== '전체' ? l : l+'사업소'}</button>
+                  <button key={l} onClick={()=>setFilterLoc(l)} className={`px-6 py-2.5 rounded-full text-[13px] font-black whitespace-nowrap transition-all ${filterLoc===l?'bg-[#0A1628] text-white shadow-lg':'bg-white text-gray-400 border border-gray-100'}`}>{l=== '전체' ? l : l+'사업소'}</button>
                 ))}
               </div>
             </div>
@@ -309,23 +253,23 @@ export default function TherapyApp() {
         {currentTab === 'my' && (
           <div className="space-y-6 a-fade">
             <h2 className="text-[28px] font-black">내 신청 내역</h2>
-            {!myApplications || myApplications.length === 0 ? <div className="p-20 text-center text-gray-300 font-black bg-white rounded-3xl border border-gray-100 shadow-sm">신청 내역이 없습니다</div> : (
+            {!myApplications || myApplications.length === 0 ? <div className="p-20 text-center text-gray-300 font-black bg-white rounded-3xl border border-gray-100">신청 내역이 없습니다</div> : (
               <div className="space-y-4">
                 {myApplications.map((p, i) => {
                   const c = colorMap[p?.color] || colorMap.orange;
                   return (
-                    <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-md">
+                    <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                       <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${c.bg}`}><Stethoscope size={24} style={{color: c.solid}}/></div><div><h3 className="font-black text-[17px]">{p?.title}</h3><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {formatDate(p?.date)}</p></div></div>
+                        <div className="flex items-center gap-3"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${c.bg}`}>🩺</div><div><h3 className="font-black text-[17px]">{p?.title}</h3><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {formatDate(p?.date)}</p></div></div>
                         <StatusBadge status="신청완료" />
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4 shadow-inner">
-                        <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><ThumbsUp size={16} className="text-orange-500"/> 만족도를 평가해주세요!</div>
+                      <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4">
+                        <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><span className="text-[16px]">👍</span> 만족도를 평가해주세요!</div>
                         <div className="flex gap-1">
-                          {[1,2,3,4,5].map(s=>(<button key={s} onClick={()=>handleRate(p.id, s)} className="hover:scale-125 transition-transform"><Star size={24} className={s<=(p?.rating||0)?'fill-orange-400 text-orange-400':'text-gray-200'}/></button>))}
+                          {[1,2,3,4,5].map(s=>(<button key={s} onClick={()=>handleRate(p.id, s)}><Star size={24} className={s<=(p?.rating||0)?'fill-orange-400 text-orange-400':'text-gray-200'}/></button>))}
                         </div>
                       </div>
-                      <div className="mt-4 flex justify-end"><button onClick={()=>alert('취소는 관리자에게 문의바랍니다.')} className="text-[11px] font-bold text-gray-300 hover:text-red-500">신청 취소하기</button></div>
+                      <div className="mt-4 flex justify-end"><button onClick={()=>onCancel(p.id)} className="text-[11px] font-bold text-gray-300 hover:text-red-500">신청 취소하기</button></div>
                     </div>
                   );
                 })}
@@ -345,8 +289,8 @@ export default function TherapyApp() {
       </nav>
 
       {showDetail && selectedProgram && <ProgramDetailSheet program={selectedProgram} colorMap={colorMap} onClose={()=>setShowDetail(false)} onApply={()=>setShowConfirm(true)} />}
-      {showConfirm && <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-[100] a-fade backdrop-blur-sm"><div className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl"><h3 className="text-[20px] font-black mb-4">신청하시겠습니까?</h3><div className="bg-gray-50 p-4 rounded-2xl text-[14px] font-bold text-gray-600 mb-6">{selectedProgram.title}<br/>{formatDate(selectedProgram.date)}</div><div className="flex gap-2"><button onClick={()=>setShowConfirm(false)} className="flex-1 py-4 font-black bg-gray-100 rounded-2xl">취소</button><button onClick={applyProgram} className="flex-[2] py-4 font-black bg-[#0A1628] text-white rounded-2xl shadow-lg">확인</button></div></div></div>}
-      {showSuccess && <div className="fixed inset-0 bg-white/90 flex items-center justify-center z-[200] a-fade"><div className="text-center"><div className="w-20 h-20 bg-green-500 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl"><Check size={40} strokeWidth={4}/></div><h2 className="text-[28px] font-black text-[#0A1628]">신청 완료!</h2></div></div>}
+      {showConfirm && <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-[100] a-fade backdrop-blur-sm"><div className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm text-center"><h3 className="text-[20px] font-black mb-4">신청하시겠습니까?</h3><div className="bg-gray-50 p-4 rounded-2xl text-[14px] font-bold text-gray-600 mb-6">{selectedProgram.title}<br/>{formatDate(selectedProgram.date)}</div><div className="flex gap-2"><button onClick={()=>setShowConfirm(false)} className="flex-1 py-4 font-black bg-gray-100 rounded-2xl">취소</button><button onClick={applyProgram} className="flex-[2] py-4 font-black bg-[#0A1628] text-white rounded-2xl">확인</button></div></div></div>}
+      {showSuccess && <div className="fixed inset-0 bg-white/90 flex items-center justify-center z-[200] a-fade"><div className="text-center"><div className="w-20 h-20 bg-green-500 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl"><Check size={40} strokeWidth={4}/></div><h2 className="text-[28px] font-black">신청 완료!</h2></div></div>}
     </div>
   );
 }
@@ -355,7 +299,7 @@ export default function TherapyApp() {
 // 하위 컴포넌트들
 // ══════════════════════════════════════════════════════════
 const StatCard = ({ icon:Icon, label, value, suffix, color }) => (
-  <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"><div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{backgroundColor: color+'15'}}><Icon size={16} style={{color}}/></div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</p><div className="flex items-baseline gap-1"><span className="text-[22px] font-black text-[#0A1628]">{value}</span><span className="text-[11px] font-bold text-gray-400">{suffix}</span></div></div>
+  <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm"><div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{backgroundColor: color+'15'}}><Icon size={16} style={{color}}/></div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</p><div className="flex items-baseline gap-1"><span className="text-[22px] font-black text-[#0A1628]">{value}</span><span className="text-[11px] font-bold text-gray-400">{suffix}</span></div></div>
 );
 
 const FeaturedCard = ({ program, colorMap, onClick }) => {
@@ -378,7 +322,7 @@ const FeaturedCard = ({ program, colorMap, onClick }) => {
 const CompactCard = ({ program, colorMap, onClick }) => {
   const c = colorMap[program?.color] || colorMap.orange;
   return (
-    <button onClick={onClick} className="w-full text-left bg-white p-5 rounded-2xl border border-gray-100 hover:shadow-lg transition-all shadow-sm">
+    <button onClick={onClick} className="w-full text-left bg-white p-5 rounded-2xl border border-gray-100 hover:shadow-md transition-all">
       <div className="flex justify-between mb-4"><span className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${c.bg} ${c.text}`}>{program?.category}</span><StatusBadge status={getProgramStatus(program)}/></div>
       <h3 className="font-black text-[#0A1628] leading-tight mb-4">{program?.title}</h3>
       <div className="flex justify-between items-center text-[11px] text-gray-400 font-bold"><span>{program?.location}</span><span>{formatDate(program?.date)}</span></div>
@@ -389,21 +333,24 @@ const CompactCard = ({ program, colorMap, onClick }) => {
 const ProgramDetailSheet = ({ program, colorMap, onClose, onApply }) => {
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center a-fade" onClick={onClose}>
-      <div className="bg-white w-full max-w-xl rounded-t-[3rem] p-8 pb-12 overflow-y-auto max-h-[90vh] a-slide-up shadow-2xl" onClick={e=>e.stopPropagation()}>
+      <div className="bg-white w-full max-w-xl rounded-t-[3rem] p-8 pb-12 overflow-y-auto max-h-[90vh] a-slide-up" onClick={e=>e.stopPropagation()}>
         <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-8" />
         <div className="flex justify-between mb-6"><StatusBadge status={getProgramStatus(program)} /><button onClick={onClose}><X size={24}/></button></div>
         <h2 className="text-[32px] font-black text-[#0A1628] leading-tight mb-4">{program?.title}</h2>
         <p className="text-gray-500 font-medium mb-10 leading-relaxed">{program?.desc}</p>
         <div className="grid grid-cols-2 gap-4 mb-10">
-          <div className="bg-gray-50 p-5 rounded-2xl shadow-inner"><p className="text-[10px] font-black text-gray-400 uppercase mb-2">장소</p><p className="font-black text-[#0A1628]">{program?.location}</p></div>
-          <div className="bg-gray-50 p-5 rounded-2xl shadow-inner"><p className="text-[10px] font-black text-gray-400 uppercase mb-2">마감일</p><p className="font-black text-[#0A1628]">{formatDate(program?.deadline)}</p></div>
+          <div className="bg-gray-50 p-5 rounded-2xl"><p className="text-[10px] font-black text-gray-400 uppercase mb-2">장소</p><p className="font-black text-[#0A1628]">{program?.location}</p></div>
+          <div className="bg-gray-50 p-5 rounded-2xl"><p className="text-[10px] font-black text-gray-400 uppercase mb-2">마감일</p><p className="font-black text-[#0A1628]">{formatDate(program?.deadline)}</p></div>
         </div>
-        <button onClick={onApply} disabled={getProgramStatus(program)!=='모집중'} className="w-full bg-[#0A1628] text-white py-5 rounded-3xl font-black shadow-xl disabled:bg-gray-200 active:scale-95 transition-transform">이 프로그램 신청하기</button>
+        <button onClick={onApply} disabled={getProgramStatus(program)!=='모집중'} className="w-full bg-[#0A1628] text-white py-5 rounded-3xl font-black shadow-xl disabled:bg-gray-200">이 프로그램 신청하기</button>
       </div>
     </div>
   );
 };
 
+// ══════════════════════════════════════════════════════════
+// 관리자 패널 (🔥 아이콘 에러 완전 박멸!)
+// ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
   const [newUser, setNewUser] = useState({ name: '', empId: '' });
@@ -416,8 +363,15 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
       capacity: parseInt(form.capacity), therapist_name: form.therapistName, description: form.desc || '테라피 세션',
       color: form.location.includes('안양') ? 'orange' : form.location.includes('부천') ? 'blue' : 'green'
     };
-    if (editingId) await supabase.from('programs').update(payload).eq('id', editingId);
-    else { payload.applied = 0; await supabase.from('programs').insert([payload]); }
+
+    if (editingId) {
+      await supabase.from('programs').update(payload).eq('id', editingId);
+      alert('수정 완료!');
+    } else {
+      payload.applied = 0;
+      await supabase.from('programs').insert([payload]);
+      alert('게시 완료!');
+    }
     window.location.reload();
   };
 
@@ -436,56 +390,52 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   return (
     <div className="space-y-12 pb-20">
       <h1 className="text-[32px] font-black text-[#0A1628]">운영자 센터</h1>
+      
       <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
         <h3 className="font-black mb-6 flex items-center gap-2"><UserPlus size={20}/> 임직원 권한 관리</h3>
         <div className="flex flex-col md:flex-row gap-3 mb-8">
           <input value={newUser.name} onChange={e=>setNewUser({...newUser, name:e.target.value})} placeholder="성함" className={inputCls} />
           <input value={newUser.empId} onChange={e=>setNewUser({...newUser, empId:e.target.value})} placeholder="사번" className={inputCls} />
-          <button onClick={async()=>{await supabase.from('registered_users').insert([{name:newUser.name, emp_id:newUser.empId.toUpperCase()}]); window.location.reload();}} className="bg-[#0A1628] text-white px-8 py-4 rounded-2xl font-black shadow-lg">등록</button>
+          <button onClick={async()=>{await supabase.from('registered_users').insert([{name:newUser.name, emp_id:newUser.empId.toUpperCase()}]); window.location.reload();}} className="bg-[#0A1628] text-white px-8 py-4 rounded-2xl font-black">등록</button>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-60 overflow-y-auto hide-scrollbar">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-60 overflow-y-auto">
           {Array.isArray(users) && users.map((u, i) => (
             <div key={i} className="bg-gray-50 p-4 rounded-2xl flex justify-between items-center"><div className="font-bold text-[13px]">{u.name} <span className="text-gray-300 text-[10px]">{u.empId}</span></div><button onClick={async()=>{await supabase.from('registered_users').delete().eq('emp_id', u.empId); window.location.reload();}}><X size={14}/></button></div>
           ))}
         </div>
       </div>
-      <div className={`p-8 rounded-[2.5rem] border-2 transition-all ${editingId?'border-orange-400 bg-orange-50/30':'border-gray-100 bg-white shadow-sm'}`}>
-        <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<Pencil size={20}/>:<Plus size={20}/>} {editingId?'내용 수정하기':'새 프로그램 개설'}</h3>
+
+      <div className={`p-8 rounded-[2.5rem] border-2 transition-all ${editingId?'border-orange-400 bg-orange-50/30':'border-gray-100 bg-white'}`}>
+        {/* 🔥 에러 주범 아이콘을 완전히 제거하고 텍스트 이모지(✏️)로 교체하여 에러 원천 차단! */}
+        <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<span className="text-xl">✏️</span>:<Plus size={20}/>} {editingId?'프로그램 내용 수정':'새 프로그램 개설'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="프로그램명"><select value={form.titleType} onChange={e=>setForm({...form, titleType:e.target.value})} className={inputCls}><option>근골격계 테라피</option><option>스트레칭 클래스</option><option>기타</option></select></Field>
-          {form.titleType==='기타' && <Field label="직접 입력"><input value={form.customTitle} onChange={e=>setForm({...form, customTitle:e.target.value})} className={inputCls} /></Field>}
-          <Field label="장소"><select value={form.location} onChange={e=>setForm({...form, location:e.target.value})} className={inputCls}><option>부천사업소</option><option>안양사업소</option><option>서울사업소</option></select></Field>
-          <Field label="실시일"><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} className={inputCls} /></Field>
-          <Field label="마감일"><input type="date" value={form.deadline} onChange={e=>setForm({...form, deadline:e.target.value})} className={inputCls} /></Field>
-          <Field label="정원"><input type="number" value={form.capacity} onChange={e=>setForm({...form, capacity:e.target.value})} className={inputCls} /></Field>
-          <Field label="강사명"><input value={form.therapistName} onChange={e=>setForm({...form, therapistName:e.target.value})} className={inputCls} /></Field>
+          <div><label className="text-[10px] font-black text-gray-400 mb-2 block">프로그램명</label><select value={form.titleType} onChange={e=>setForm({...form, titleType:e.target.value})} className={inputCls}><option>근골격계 테라피</option><option>스트레칭 클래스</option><option>기타</option></select></div>
+          {form.titleType==='기타' && <div><label className="text-[10px] font-black text-gray-400 mb-2 block">직접 입력</label><input value={form.customTitle} onChange={e=>setForm({...form, customTitle:e.target.value})} className={inputCls} /></div>}
+          <div><label className="text-[10px] font-black text-gray-400 mb-2 block">장소</label><select value={form.location} onChange={e=>setForm({...form, location:e.target.value})} className={inputCls}><option>부천사업소</option><option>안양사업소</option><option>서울사업소</option></select></div>
+          <div><label className="text-[10px] font-black text-gray-400 mb-2 block">실시일</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} className={inputCls} /></div>
+          <div><label className="text-[10px] font-black text-gray-400 mb-2 block">신청 마감일</label><input type="date" value={form.deadline} onChange={e=>setForm({...form, deadline:e.target.value})} className={inputCls} /></div>
+          <div><label className="text-[10px] font-black text-gray-400 mb-2 block">모집 정원</label><input type="number" value={form.capacity} onChange={e=>setForm({...form, capacity:e.target.value})} className={inputCls} /></div>
+          <div><label className="text-[10px] font-black text-gray-400 mb-2 block">강사명</label><input value={form.therapistName} onChange={e=>setForm({...form, therapistName:e.target.value})} className={inputCls} /></div>
         </div>
         <div className="flex gap-2 mt-8">
           {editingId && <button onClick={()=>window.location.reload()} className="flex-1 bg-gray-200 py-5 rounded-3xl font-black">취소</button>}
-          <button onClick={handleCreateOrUpdate} className={`py-5 rounded-3xl font-black shadow-xl ${editingId?'flex-[2] bg-orange-500 text-white':'w-full bg-[#0A1628] text-white'}`}>{editingId?'수정 내용 저장하기':'프로그램 게시하기'}</button>
+          <button onClick={handleCreateOrUpdate} className={`py-5 rounded-3xl font-black shadow-xl transition-all ${editingId?'flex-[2] bg-orange-500 text-white':'w-full bg-[#0A1628] text-white'}`}>{editingId?'수정 내용 저장하기':'프로그램 게시하기'}</button>
         </div>
       </div>
+
       <div className="space-y-4">
         <h3 className="font-black text-[#0A1628]">운영 현황</h3>
         {Array.isArray(programs) && programs.map(p => (
-          <div key={p.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex flex-col md:flex-row justify-between gap-4 shadow-sm hover:shadow-md transition-shadow">
+          <div key={p.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
             <div><div className="flex items-center gap-2 mb-1"><h4 className="font-black">{p?.title}</h4><StatusBadge status={getProgramStatus(p)}/></div><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {p?.applied}/{p?.capacity}명 신청</p></div>
             <div className="flex gap-2 items-center">
-              {getProgramStatus(p) === '모집마감' && <button onClick={()=>onLottery(p.id)} className="bg-orange-500 text-white px-5 py-2.5 rounded-xl font-black text-[12px] shadow-lg active:scale-95">추첨 실행</button>}
+              {getProgramStatus(p) === '모집마감' && <button onClick={()=>onLottery(p.id)} className="bg-orange-500 text-white px-5 py-2.5 rounded-xl font-black text-[12px] shadow-lg">추첨 실행</button>}
               <button onClick={()=>handleEditClick(p)} className="bg-blue-50 text-blue-600 px-5 py-2.5 rounded-xl font-black text-[12px]">수정</button>
               <button onClick={async()=>{if(confirm('삭제?')){await supabase.from('programs').delete().eq('id', p.id); window.location.reload();}}} className="bg-red-50 text-red-500 px-5 py-2.5 rounded-xl font-black text-[12px]">삭제</button>
             </div>
           </div>
         ))}
       </div>
-      {lotteryResult && <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-[200] a-fade"><div className="bg-white p-8 rounded-3xl text-center shadow-2xl"><div className="text-[40px] mb-4">🎉</div><h3 className="font-black mb-4">{lotteryResult}</h3><button onClick={()=>setLotteryResult(null)} className="bg-black text-white px-8 py-3 rounded-xl font-bold">확인</button></div></div>}
     </div>
   );
 };
-
-const Field = ({ label, children }) => (
-  <div className="w-full">
-    <label className="text-[10px] font-black text-gray-400 mb-2 block ml-1 uppercase">{label}</label>
-    {children}
-  </div>
-);
