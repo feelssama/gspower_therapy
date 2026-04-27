@@ -203,16 +203,11 @@ export default function TherapyApp() {
     window.location.reload();
   };
 
-  // 🔥 신청 로직: 에러 메시지를 띄워주도록 강화
   const applyProgram = async () => {
     if (!selectedProgram) return;
     
     if (supabaseUrl !== 'https://placeholder.supabase.co') {
-      const { data: existingApp } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('program_id', selectedProgram.id)
-        .eq('emp_id', user.empId);
+      const { data: existingApp } = await supabase.from('applications').select('*').eq('program_id', selectedProgram.id).eq('emp_id', user.empId);
 
       if (existingApp && existingApp.length > 0) {
         alert('이미 신청이 완료된 프로그램입니다!');
@@ -226,19 +221,11 @@ export default function TherapyApp() {
         user_name: user.name
       }]).select();
 
-      // DB 에러 시 상세 내역 알림
-      if (insertError) {
-        alert(`신청 실패 (DB오류): ${insertError.message}`);
-        return;
-      }
+      if (insertError) return alert(`신청 실패 (DB오류): ${insertError.message}`);
       
       const newCount = (selectedProgram.applied || 0) + 1;
-      const { error: updateError } = await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
+      await supabase.from('programs').update({ applied: newCount }).eq('id', selectedProgram.id);
       
-      if(updateError) {
-         console.warn("카운트 업데이트 실패:", updateError);
-      }
-
       setPrograms(prev => prev.map(p => p.id === selectedProgram.id ? { ...p, applied: newCount } : p));
       setMyApplications(prev => [...prev, { ...selectedProgram, applied: newCount, appId: insertedApp?.[0]?.id }]);
     }
@@ -374,11 +361,20 @@ export default function TherapyApp() {
                         <StatusBadge status={isCompleted ? '종료' : '신청완료'} />
                       </div>
 
+                      {/* 🔥 별점 등록 확인 로직 추가 */}
                       {isCompleted ? (
                         <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4 shadow-inner">
                           <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><ThumbsUp size={16} className="text-orange-500"/> 테라피는 어떠셨나요? 만족도를 평가해주세요!</div>
                           <div className="flex gap-1">
-                            {[1,2,3,4,5].map(s=>(<button key={s} onClick={()=>handleRate(p.id, s)} className="hover:scale-125 transition-transform"><Star size={24} className={s<=(p?.rating||0)?'fill-orange-400 text-orange-400':'text-gray-200'}/></button>))}
+                            {[1,2,3,4,5].map(s=>(
+                              <button key={s} onClick={() => {
+                                if(confirm(`만족도 ${s}점을 부여하시겠습니까?`)) {
+                                  handleRate(p.id, s);
+                                }
+                              }} className="hover:scale-125 transition-transform">
+                                <Star size={24} className={s<=(p?.rating||0)?'fill-orange-400 text-orange-400':'text-gray-200'}/>
+                              </button>
+                            ))}
                           </div>
                         </div>
                       ) : (
@@ -478,7 +474,7 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply }) => {
 };
 
 // ══════════════════════════════════════════════════════════
-// 관리자 패널 (🔥 수정, 삭제 에러 메세지 확인 로직 추가)
+// 관리자 패널 (🔥 운영 현황 리스트 대폭 강화 및 그리드화)
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
@@ -488,7 +484,6 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [viewingApplicants, setViewingApplicants] = useState(null);
   const [applicantsList, setApplicantsList] = useState([]);
 
-  // 🔥 저장/수정 시 에러 메시지 노출 로직 추가
   const handleCreateOrUpdate = async () => {
     const title = form.titleType === '기타' ? form.customTitle : form.titleType;
     const payload = {
@@ -567,21 +562,34 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
       
       <div className="space-y-4">
         <h3 className="font-black text-[#0A1628]">운영 현황</h3>
+        {/* 🔥 운영 현황 카드에 프로그램명/상태/장소/실시일/마감일/강사명/지원자수 모두 표기! */}
         {Array.isArray(programs) && programs.map(p => (
-          <div key={p.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex flex-col md:flex-row justify-between gap-4 shadow-sm hover:shadow-md transition-shadow">
-            <div><div className="flex items-center gap-2 mb-1"><h4 className="font-black">{p?.title}</h4><StatusBadge status={getProgramStatus(p)}/></div><p className="text-[12px] text-gray-400 font-bold">{p?.location} · {p?.applied}/{p?.capacity}명 신청</p></div>
-            <div className="flex gap-2 items-center flex-wrap">
-              {getProgramStatus(p) === '모집마감' && <button onClick={()=>onLottery(p.id)} className="bg-orange-500 text-white px-5 py-2.5 rounded-xl font-black text-[12px] shadow-lg active:scale-95">추첨 실행</button>}
-              <button onClick={()=>fetchApplicants(p)} className="bg-green-50 text-green-700 px-5 py-2.5 rounded-xl font-black text-[12px] flex items-center gap-1"><FileText size={14}/>명단보기</button>
-              <button onClick={()=>handleEditClick(p)} className="bg-blue-50 text-blue-600 px-5 py-2.5 rounded-xl font-black text-[12px]">수정</button>
-              {/* 🔥 삭제 시 에러 메시지 노출 로직 추가 */}
+          <div key={p.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex-1 w-full">
+              <div className="flex items-center gap-2 mb-4">
+                <h4 className="font-black text-[18px] text-[#0A1628]">{p?.title}</h4>
+                <StatusBadge status={getProgramStatus(p)}/>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-[12px] font-bold text-gray-500 bg-gray-50 p-4 rounded-2xl">
+                <div className="flex items-center gap-1.5"><MapPin size={14} className="text-gray-400"/> {p?.location}</div>
+                <div className="flex items-center gap-1.5"><Calendar size={14} className="text-gray-400"/> 실시: {formatDate(p?.date)}</div>
+                <div className="flex items-center gap-1.5"><Clock size={14} className="text-gray-400"/> 마감: {formatDate(p?.deadline)}</div>
+                <div className="flex items-center gap-1.5"><UserPlus size={14} className="text-gray-400"/> 강사: {p?.therapist?.name}</div>
+                <div className="flex items-center gap-1.5 col-span-2 lg:col-span-1"><Users size={14} className="text-gray-400"/> 현황: <span className={p?.applied >= p?.capacity ? 'text-red-500' : 'text-blue-500'}>{p?.applied}</span> / {p?.capacity}명 신청</div>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 items-center flex-wrap md:flex-nowrap w-full md:w-auto justify-end mt-2 md:mt-0">
+              {getProgramStatus(p) === '모집마감' && <button onClick={()=>onLottery(p.id)} className="bg-orange-500 text-white px-5 py-3 rounded-xl font-black text-[12px] shadow-lg active:scale-95">추첨 실행</button>}
+              <button onClick={()=>fetchApplicants(p)} className="bg-green-50 text-green-700 px-5 py-3 rounded-xl font-black text-[12px] flex items-center gap-1"><FileText size={14}/>명단보기</button>
+              <button onClick={()=>handleEditClick(p)} className="bg-blue-50 text-blue-600 px-5 py-3 rounded-xl font-black text-[12px]">수정</button>
               <button onClick={async()=>{
                 if(confirm('정말 삭제하시겠습니까?')){
                   const { error } = await supabase.from('programs').delete().eq('id', p.id); 
                   if (error) alert('삭제 실패 (DB오류): ' + error.message);
                   else window.location.reload();
                 }
-              }} className="bg-red-50 text-red-500 px-5 py-2.5 rounded-xl font-black text-[12px]">삭제</button>
+              }} className="bg-red-50 text-red-500 px-5 py-3 rounded-xl font-black text-[12px]">삭제</button>
             </div>
           </div>
         ))}
