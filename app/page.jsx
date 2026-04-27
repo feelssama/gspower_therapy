@@ -241,11 +241,97 @@ export default function TherapyApp() {
     alert('평점이 반영되었습니다! ⭐');
   };
 
-  const handleLottery = async (id) => {
-    if (supabaseUrl !== 'https://placeholder.supabase.co') await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', id);
-    setPrograms(prev => prev.map(p => p.id === id ? { ...p, manualStatus: '추첨완료' } : p));
-    setLotteryResult('추첨 알고리즘이 성공적으로 가동되었습니다.');
-  };
+// 🔥 [V15.1] GS파워 공정 추첨 알고리즘 탑재
+  const handleLottery = async (programId) => {
+    if (supabaseUrl === 'https://placeholder.supabase.co') return;
+
+    // 1. 추첨할 프로그램 정보(정원) 가져오기
+    const targetProgram = programs.find(p => p.id === programId);
+    if (!targetProgram) return;
+    const capacity = targetProgram.capacity;
+
+    // 2. 이 프로그램에 신청한 현재 명단 싹 다 가져오기
+    const { data: currentApplicants } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('program_id', programId);
+
+    if (!currentApplicants || currentApplicants.length === 0) {
+      return alert('신청자가 없어 추첨을 진행할 수 없습니다.');
+    }
+
+    // 3. 과거에 당첨되었던 사람들 명단 가져오기 (페널티 대상자 색출)
+    const { data: pastWinners } = await supabase
+      .from('applications')
+      .select('emp_id')
+      .eq('status', '당첨')
+      .neq('program_id', programId); // 이번 프로그램은 제외
+
+    const pastWinnerIds = pastWinners ? pastWinners.map(a => a.emp_id) : [];
+
+    // 4. 신청자 그룹 분류 (1순위: 퓨어 신규, 2순위: 과거 당첨자)
+    const firstPriority = [];
+    const secondPriority = [];
+
+    currentApplicants.forEach(app => {
+      if (pastWinnerIds.includes(app.emp_id)) {
+        secondPriority.push(app); // 페널티 대상
+      } else {
+        firstPriority.push(app);  // 1순위 우대 대상
+      }
+    });
+
+    // 5. 공정 무작위 셔플 (로또 통 돌리기)
+    const shuffle = (array) => array.sort(() => Math.random() - 0.5);
+    shuffle(firstPriority);
+    shuffle(secondPriority);
+
+    // 6. 당첨자 / 대기자 뽑기
+    let winners = [];
+    let losers = [];
+
+    if (firstPriority.length >= capacity) {
+      // 1순위 신청자가 정원보다 많거나 같으면: 1순위 안에서만 추첨하고 끝! 2순위는 전원 광탈
+      winners = firstPriority.slice(0, capacity);
+      losers = [...firstPriority.slice(capacity), ...secondPriority];
+    } else {
+      // 미달일 경우: 1순위는 전원 합격, 남은 자리를 2순위(과거 당첨자)들끼리 뺑뺑이 돌림
+      winners = [...firstPriority];
+      const remainingSeats = capacity - firstPriority.length;
+      winners = [...winners, ...secondPriority.slice(0, remainingSeats)];
+      losers = secondPriority.slice(remainingSeats);
+    }
+
+    // 7. DB에 당첨자/탈락자 결과 도장 꽝 찍기!
+    if (winners.length > 0) {
+      await supabase.from('applications').update({ status: '당첨' }).in('id', winners.map(w => w.id));
+    }
+    if (losers.length > 0) {
+      await supabase.from('applications').update({ status: '대기(탈락)' }).in('id', losers.map(l => l.id));
+    }
+
+    // 8. 프로그램 상태 '추첨완료'로 변경
+    await supabase.from('programs').update({ manual_status: '추첨완료' }).eq('id', programId);
+    setPrograms(prev => prev.map(p => p.id === programId ? { ...p, manualStatus: '추첨완료' } : p));
+
+    // 9. 관리자 화면에 띄워줄 결과 리포트 생성
+    const resultHtml = `
+      <div class="text-left w-full">
+        <p class="font-black text-[15px] text-[#0A1628] mb-3">🎯 총 신청자: ${currentApplicants.length}명 (정원: ${capacity}명)</p>
+        <div class="bg-gray-50 p-3 rounded-xl mb-4">
+          <p class="text-[12px] font-bold text-gray-600">✨ 1순위 (신규): <span class="text-blue-600">${firstPriority.length}명</span></p>
+          <p class="text-[12px] font-bold text-gray-600 mt-1">🚨 2순위 (직전 당첨자): <span class="text-red-500">${secondPriority.length}명</span></p>
+        </div>
+        <p class="font-black text-green-600 text-[13px] mb-1">🎉 최종 당첨자 (${winners.length}명)</p>
+        <p class="text-[12px] text-gray-500 bg-green-50 p-2 rounded-lg break-words leading-relaxed">${winners.map(w => w.user_name).join(', ') || '없음'}</p>
+        
+        <p class="font-black text-red-500 text-[13px] mt-3 mb-1">💧 대기/탈락자 (${losers.length}명)</p>
+        <p class="text-[12px] text-gray-500 bg-red-50 p-2 rounded-lg break-words leading-relaxed">${losers.map(l => l.user_name).join(', ') || '없음'}</p>
+      </div>
+    `;
+
+    setLotteryResult(resultHtml);
+  };  
 
   const filtered = programs.filter(p => (filterLoc === '전체' || String(p.location||'').includes(filterLoc)) && (!searchQ || String(p.title||'').includes(searchQ)));
   const colorMap = {
