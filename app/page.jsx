@@ -14,7 +14,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ══════════════════════════════════════════════════════════
-// GS파워 로고 (🔥 잃어버린 로고 완벽 복구 완료!)
+// 공통 컴포넌트 & 헬퍼 (GS파워 로고 포함)
 // ══════════════════════════════════════════════════════════
 const GSLogo = ({ size = 56, onClick }) => {
   const [imgError, setImgError] = useState(false);
@@ -32,9 +32,6 @@ const GSLogo = ({ size = 56, onClick }) => {
   );
 };
 
-// ══════════════════════════════════════════════════════════
-// 글로벌 스타일
-// ══════════════════════════════════════════════════════════
 const GlobalStyles = () => (
   <style>{`
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
@@ -129,7 +126,6 @@ export default function TherapyApp() {
     const found = registeredUsers.find(u => u.name === loginForm.name && u.empId === String(loginForm.empId).toUpperCase());
     if (found) {
       setUser(found);
-      // 🔥 관리자 인증을 거친 상태라면 바로 운영자 센터로 이동
       if (isAdmin) setCurrentTab('admin'); 
     }
     else alert('등록되지 않은 정보입니다.');
@@ -353,7 +349,7 @@ const ProgramDetailSheet = ({ program, colorMap, onClose, onApply }) => {
 };
 
 // ══════════════════════════════════════════════════════════
-// 관리자 패널 (🔥 유령 아이콘 박멸! 텍스트 이모지로 완벽 방어)
+// 관리자 패널 (🔥 아이콘 에러 완전 박멸!)
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
@@ -410,7 +406,7 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
       </div>
 
       <div className={`p-8 rounded-[2.5rem] border-2 transition-all ${editingId?'border-orange-400 bg-orange-50/30':'border-gray-100 bg-white'}`}>
-        {/* 🔥 에러의 주범이었던 Edit 아이콘을 가장 안전한 텍스트 이모지(✏️)로 교체! */}
+        {/* 🔥 에러 주범 아이콘을 완전히 제거하고 텍스트 이모지(✏️)로 교체하여 에러 원천 차단! */}
         <h3 className="font-black mb-6 flex items-center gap-2">{editingId?<span className="text-xl">✏️</span>:<Plus size={20}/>} {editingId?'프로그램 내용 수정':'새 프로그램 개설'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><label className="text-[10px] font-black text-gray-400 mb-2 block">프로그램명</label><select value={form.titleType} onChange={e=>setForm({...form, titleType:e.target.value})} className={inputCls}><option>근골격계 테라피</option><option>스트레칭 클래스</option><option>기타</option></select></div>
@@ -440,8 +436,6 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
           </div>
         ))}
       </div>
-      {/* 🔥 에러 주범이었던 Dna 아이콘을 안전한 텍스트 이모지로 교체! */}
-      {lotteryResult && <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-[200] a-fade"><div className="bg-white p-8 rounded-3xl text-center"><div className="text-[40px] mb-4">🎉</div><h3 className="font-black mb-4">{lotteryResult}</h3><button onClick={()=>setLotteryResult(null)} className="bg-black text-white px-8 py-3 rounded-xl font-bold">확인</button></div></div>}
     </div>
   );
 };
