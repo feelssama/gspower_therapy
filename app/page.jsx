@@ -32,9 +32,6 @@ const GSLogo = ({ size = 56, onClick }) => {
   );
 };
 
-// ══════════════════════════════════════════════════════════
-// 글로벌 스타일
-// ══════════════════════════════════════════════════════════
 const GlobalStyles = () => (
   <style>{`
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
@@ -73,7 +70,7 @@ const formatDate = (iso) => {
 const getProgramStatus = (p) => {
   if (!p) return '종료';
   if (p.manualStatus) return p.manualStatus; 
-  if (!p.date || !p.deadline) return '모집중'; // 기한이 없으면 무조건 모집중으로 방어
+  if (!p.date || !p.deadline) return '모집중'; 
   try {
     const today = new Date().toISOString().split('T')[0];
     if (p.date < today) return '종료';
@@ -120,7 +117,6 @@ export default function TherapyApp() {
     const fetchRealData = async () => {
       try {
         if (supabaseUrl !== 'https://placeholder.supabase.co') {
-          // 프로그램 데이터 호출 및 철통 방어 매핑
           const { data: pData } = await supabase.from('programs').select('*').order('created_at', { ascending: false });
           if (pData && Array.isArray(pData)) {
             const mappedPrograms = pData.map(p => ({
@@ -137,7 +133,7 @@ export default function TherapyApp() {
               therapist: { 
                 name: p.therapist_name || '담당자', 
                 role: p.therapist_role || '테라피스트', 
-                // 🔥 [핵심 방어] charAt(0) 에러 완벽 차단!
+                // 🔥 [핵심 방어] DB 이름이 비어있어도 절대 죽지 않음!
                 avatar: String(p.therapist_name || 'G').charAt(0) 
               },
               desc: p.description || '', 
@@ -145,7 +141,6 @@ export default function TherapyApp() {
             }));
             setPrograms(mappedPrograms);
           }
-          // 임직원 데이터 호출
           const { data: users } = await supabase.from('registered_users').select('*');
           if (users && Array.isArray(users)) {
             setRegisteredUsers(users.map(u => ({ name: u.name || '', empId: String(u.emp_id || '').toUpperCase() })));
@@ -197,7 +192,6 @@ export default function TherapyApp() {
     setPrograms(prev => prev.map(item => item.id === id ? { ...item, manualStatus: "추첨완료" } : item));
   };
 
-  // 🔥 [핵심 방어] 검색 필터에서 .includes()가 죽지 않도록 String() 처리
   const filtered = programs.filter(p => {
     if (!p) return false;
     const locMatch = filterLoc === '전체' || String(p.location || '').includes(filterLoc);
@@ -211,9 +205,6 @@ export default function TherapyApp() {
     green:  { bg: 'bg-[#EFF8EC]', dot: 'bg-[#5CB85C]', text: 'text-[#2E7D32]', solid: '#5CB85C', soft: 'from-[#D4EDC9] to-[#EFF8EC]' },
   };
 
-  // ═══════════════════════════════════════════════════
-  // 로그인 화면
-  // ═══════════════════════════════════════════════════
   if (!user) {
     return (
       <>
@@ -247,9 +238,6 @@ export default function TherapyApp() {
     );
   }
 
-  // ═══════════════════════════════════════════════════
-  // 메인 렌더링
-  // ═══════════════════════════════════════════════════
   return (
     <>
       <GlobalStyles />
@@ -273,7 +261,6 @@ export default function TherapyApp() {
             <div className="flex items-center gap-2.5">
               <button onClick={() => setShowNotifications(true)} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center relative"><Bell size={14} className="text-[#0A1628]" />{notifications.length > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#F47B20] rounded-full" />}</button>
               <button onClick={() => { setUser(null); setIsAdmin(false); }} className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:text-red-500"><LogOut size={14} /></button>
-              {/* 🔥 [방어] user.name이 없어도 안 튕김 */}
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F47B20] to-[#1B3A6B] flex items-center justify-center text-white font-black text-[13px]">{String(user?.name || 'G').charAt(0)}</div>
             </div>
           </div>
@@ -333,10 +320,6 @@ export default function TherapyApp() {
   );
 }
 
-// ══════════════════════════════════════════════════════════
-// Tabs & Components (안전장치 풀장착!)
-// ══════════════════════════════════════════════════════════
-
 const HomeTab = ({ user, programs, myApplications, colorMap, onOpenProgram, onGoPrograms }) => (
   <div className="space-y-6 a-fade">
     <div className="relative overflow-hidden rounded-[2.5rem] bg-[#0A1628] p-8 lg:p-12 text-white">
@@ -351,7 +334,6 @@ const HomeTab = ({ user, programs, myApplications, colorMap, onOpenProgram, onGo
       <StatCard icon={Activity} label="참여 프로그램" value={myApplications?.length || 0} suffix="건" accent="#F47B20" />
       <StatCard icon={Users} label="평균 만족도" value="4.9" suffix="/5.0" accent="#5CB85C" />
       <StatCard icon={Award} label="신규 오픈" value={programs?.length || 0} suffix="개" accent="#1B3A6B" />
-      {/* 🔥 [방어] Array.reduce 안전하게 처리 */}
       <StatCard icon={TrendingUp} label="참여 인원" value={Array.isArray(programs) ? programs.reduce((a,p)=>a+(p?.applied||0),0) : 0} suffix="명" accent="#F47B20" />
     </div>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -423,7 +405,6 @@ const StatCard = ({ icon: Icon, label, value, suffix, accent }) => (
 );
 
 const FeaturedCard = ({ program, onClick, colorMap }) => {
-  // 🔥 [핵심 방어] program 객체가 없거나 color가 이상해도 무조건 통과!
   const c = colorMap[program?.color] || colorMap['orange'];
   const cap = program?.capacity || 1; 
   const pct = Math.min(100, ((program?.applied || 0) / cap) * 100);
