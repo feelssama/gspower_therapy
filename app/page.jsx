@@ -361,7 +361,6 @@ export default function TherapyApp() {
                         <StatusBadge status={isCompleted ? '종료' : '신청완료'} />
                       </div>
 
-                      {/* 🔥 별점 등록 확인 로직 추가 */}
                       {isCompleted ? (
                         <div className="bg-gray-50 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-4 shadow-inner">
                           <div className="flex items-center gap-2 text-[12px] font-black text-gray-600"><ThumbsUp size={16} className="text-orange-500"/> 테라피는 어떠셨나요? 만족도를 평가해주세요!</div>
@@ -413,7 +412,8 @@ export default function TherapyApp() {
         {isAdmin && <button onClick={()=>setCurrentTab('admin')} className={`flex flex-col items-center gap-1 ${currentTab==='admin'?'text-blue-600':'text-gray-300'}`}><Settings size={20}/><span className="text-[10px] font-black">관리</span></button>}
       </nav>
 
-      {showDetail && selectedProgram && <ProgramDetailSheet program={selectedProgram} colorMap={colorMap} onClose={()=>setShowDetail(false)} onApply={()=>setShowConfirm(true)} />}
+      {/* 🔥 모달창(ProgramDetailSheet) 렌더링 호출 시 myApplications 전달! */}
+      {showDetail && selectedProgram && <ProgramDetailSheet program={selectedProgram} myApplications={myApplications} colorMap={colorMap} onClose={()=>setShowDetail(false)} onApply={()=>setShowConfirm(true)} />}
       {showConfirm && <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-[100] a-fade backdrop-blur-sm"><div className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl"><h3 className="text-[20px] font-black mb-4">신청하시겠습니까?</h3><div className="bg-gray-50 p-4 rounded-2xl text-[14px] font-bold text-gray-600 mb-6">{selectedProgram.title}<br/>{formatDate(selectedProgram.date)}</div><div className="flex gap-2"><button onClick={()=>setShowConfirm(false)} className="flex-1 py-4 font-black bg-gray-100 rounded-2xl">취소</button><button onClick={applyProgram} className="flex-[2] py-4 font-black bg-[#0A1628] text-white rounded-2xl shadow-lg">확인</button></div></div></div>}
       {showSuccess && <div className="fixed inset-0 bg-white/90 flex items-center justify-center z-[200] a-fade"><div className="text-center"><div className="w-20 h-20 bg-green-500 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl"><Check size={40} strokeWidth={4}/></div><h2 className="text-[28px] font-black text-[#0A1628]">신청 완료!</h2></div></div>}
     </div>
@@ -455,26 +455,64 @@ const CompactCard = ({ program, colorMap, onClick }) => {
   );
 };
 
-const ProgramDetailSheet = ({ program, colorMap, onClose, onApply }) => {
+// 🔥 프로그램 상세 팝업 모달 UX 개편
+const ProgramDetailSheet = ({ program, colorMap, onClose, onApply, myApplications }) => {
+  const isApplied = myApplications?.some(a => a.id === program.id);
+  const status = getProgramStatus(program);
+  
+  let btnText = "이 프로그램 신청하기";
+  let isDisabled = status !== '모집중';
+  
+  if (isApplied) {
+    btnText = "이미 신청 완료한 프로그램입니다 💖";
+    isDisabled = true;
+  } else if (status === '모집마감') {
+    btnText = "모집이 마감되었습니다 🔒";
+  } else if (status === '추첨완료') {
+    btnText = "추첨이 완료되었습니다 🎉";
+  } else if (status === '종료') {
+    btnText = "종료된 프로그램입니다";
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center a-fade" onClick={onClose}>
       <div className="bg-white w-full max-w-xl rounded-t-[3rem] p-8 pb-12 overflow-y-auto max-h-[90vh] a-slide-up shadow-2xl" onClick={e=>e.stopPropagation()}>
         <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-8" />
-        <div className="flex justify-between mb-6"><StatusBadge status={getProgramStatus(program)} /><button onClick={onClose}><X size={24}/></button></div>
+        <div className="flex justify-between mb-6"><StatusBadge status={status} /><button onClick={onClose}><X size={24}/></button></div>
         <h2 className="text-[32px] font-black text-[#0A1628] leading-tight mb-4">{program?.title}</h2>
-        <p className="text-gray-500 font-medium mb-10 leading-relaxed">{program?.desc}</p>
+        <p className="text-gray-500 font-medium mb-8 leading-relaxed">{program?.desc}</p>
+        
+        {/* 🔥 현업 기획을 반영한 2x2 상세 그리드 */}
         <div className="grid grid-cols-2 gap-4 mb-10">
-          <div className="bg-gray-50 p-5 rounded-2xl shadow-inner"><p className="text-[10px] font-black text-gray-400 uppercase mb-2">장소</p><p className="font-black text-[#0A1628]">{program?.location}</p></div>
-          <div className="bg-gray-50 p-5 rounded-2xl shadow-inner"><p className="text-[10px] font-black text-gray-400 uppercase mb-2">마감일</p><p className="font-black text-[#0A1628]">{formatDate(program?.deadline)}</p></div>
+          <div className="bg-gray-50 p-5 rounded-2xl shadow-inner">
+            <p className="text-[10px] font-black text-gray-400 uppercase mb-2 flex items-center gap-1"><MapPin size={12}/> 장소</p>
+            <p className="font-black text-[#0A1628]">{program?.location}</p>
+          </div>
+          <div className="bg-blue-50 p-5 rounded-2xl shadow-inner border border-blue-100">
+            <p className="text-[10px] font-black text-blue-400 uppercase mb-2 flex items-center gap-1"><Calendar size={12}/> 실시 예정일</p>
+            <p className="font-black text-blue-900">{formatDate(program?.date)}</p>
+          </div>
+          <div className="bg-gray-50 p-5 rounded-2xl shadow-inner">
+            <p className="text-[10px] font-black text-gray-400 uppercase mb-2 flex items-center gap-1"><Clock size={12}/> 신청 마감일</p>
+            <p className="font-black text-[#0A1628]">{formatDate(program?.deadline)}</p>
+          </div>
+          <div className="bg-gray-50 p-5 rounded-2xl shadow-inner">
+            <p className="text-[10px] font-black text-gray-400 uppercase mb-2 flex items-center gap-1"><Users size={12}/> 현재 신청 현황</p>
+            <p className="font-black text-[#0A1628]"><span className={program?.applied >= program?.capacity ? 'text-red-500' : 'text-blue-600'}>{program?.applied}명</span> / {program?.capacity}명</p>
+          </div>
         </div>
-        <button onClick={onApply} disabled={getProgramStatus(program)!=='모집중'} className="w-full bg-[#0A1628] text-white py-5 rounded-3xl font-black shadow-xl disabled:bg-gray-200 active:scale-95 transition-transform">이 프로그램 신청하기</button>
+        
+        {/* 🔥 상황에 맞게 텍스트와 디자인이 변하는 똑똑한 버튼 */}
+        <button onClick={onApply} disabled={isDisabled} className={`w-full text-white py-5 rounded-3xl font-black shadow-xl active:scale-95 transition-transform ${isDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#0A1628]'}`}>
+          {btnText}
+        </button>
       </div>
     </div>
   );
 };
 
 // ══════════════════════════════════════════════════════════
-// 관리자 패널 (🔥 운영 현황 리스트 대폭 강화 및 그리드화)
+// 관리자 패널 
 // ══════════════════════════════════════════════════════════
 const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
   const [form, setForm] = useState({ titleType: '근골격계 테라피', customTitle: '', category: '물리치료', location: '부천사업소', date: '', deadline: '', capacity: '', therapistName: '', desc: '' });
@@ -562,7 +600,6 @@ const AdminPanel = ({ programs, users, onLottery, colorMap }) => {
       
       <div className="space-y-4">
         <h3 className="font-black text-[#0A1628]">운영 현황</h3>
-        {/* 🔥 운영 현황 카드에 프로그램명/상태/장소/실시일/마감일/강사명/지원자수 모두 표기! */}
         {Array.isArray(programs) && programs.map(p => (
           <div key={p.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex-1 w-full">
